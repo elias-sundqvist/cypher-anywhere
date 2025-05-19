@@ -39,6 +39,10 @@ CypherAnywhere is a modular, storage‑agnostic library that allows developers t
 | **Physical Plan & Execution Engine** | Translate logical operators into executable iterators, then stream results.                            |
 | **Storage Adapter**                  | Provide primitive graph access methods plus an index & statistics catalog.                             |
 
+### Logical vs Physical Plan
+
+The parser first emits an **AST** that is converted into a **LogicalPlan**.  This logical form is independent of any execution strategy and is the place where rewrite and optimisation rules operate.  A separate compiler then transforms the logical operators into a **PhysicalPlan** composed of executable iterators.  In the current MVP the logical nodes largely mirror the AST, but having this explicit stage boundary allows future rule‑based and cost‑based optimisations.
+
 ---
 
 ## 3. Project Layout
