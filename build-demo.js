@@ -6,5 +6,6 @@ esbuild.build({
   outfile: 'docs/bundle.js',
   format: 'esm',
   sourcemap: true,
-  target: ['es2019']
+  target: ['es2019'],
+  external: ['fs']
 }).catch(() => process.exit(1));
