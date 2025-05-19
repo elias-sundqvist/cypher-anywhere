@@ -1,4 +1,11 @@
-import { StorageAdapter, NodeRecord, RelRecord, NodeScanSpec, TransactionCtx } from '@cypher-anywhere/core';
+import {
+  StorageAdapter,
+  NodeRecord,
+  RelRecord,
+  NodeScanSpec,
+  TransactionCtx,
+  IndexMetadata,
+} from '@cypher-anywhere/core';
 import * as fs from 'fs';
 
 interface Dataset {
@@ -9,11 +16,14 @@ interface Dataset {
 export interface JsonAdapterOptions {
   datasetPath?: string;
   dataset?: Dataset;
+  indexes?: IndexMetadata[];
 }
 
 export class JsonAdapter implements StorageAdapter {
   private data: Dataset;
   private txData?: Dataset;
+  private indexes: IndexMetadata[];
+  private indexData: Map<string, Map<unknown, NodeRecord[] | NodeRecord>> = new Map();
 
   constructor(options: JsonAdapterOptions) {
     if (options.dataset) {
@@ -23,6 +33,32 @@ export class JsonAdapter implements StorageAdapter {
       this.data = JSON.parse(text);
     } else {
       throw new Error('dataset or datasetPath must be provided');
+    }
+    this.indexes = options.indexes ?? [];
+    this.buildIndexes();
+  }
+
+  private buildIndexes(): void {
+    this.indexData.clear();
+    const src = this.data;
+    for (const idx of this.indexes) {
+      if (idx.properties.length !== 1) continue;
+      const prop = idx.properties[0];
+      const key = `${idx.label ?? ''}:${prop}`;
+      const map = new Map<unknown, NodeRecord[] | NodeRecord>();
+      for (const node of src.nodes) {
+        if (idx.label && !node.labels.includes(idx.label)) continue;
+        const val = node.properties[prop];
+        if (val === undefined) continue;
+        if (idx.unique) {
+          map.set(val, node);
+        } else {
+          const arr = (map.get(val) as NodeRecord[] | undefined) ?? [];
+          arr.push(node);
+          map.set(val, arr);
+        }
+      }
+      this.indexData.set(key, map);
     }
   }
 
@@ -47,12 +83,55 @@ export class JsonAdapter implements StorageAdapter {
     const id = maxId + 1;
     const node: NodeRecord = { id, labels, properties };
     target.nodes.push(node);
+    for (const idx of this.indexes) {
+      if (idx.properties.length !== 1) continue;
+      const prop = idx.properties[0];
+      if (idx.label && !labels.includes(idx.label)) continue;
+      const val = properties[prop];
+      if (val === undefined) continue;
+      const key = `${idx.label ?? ''}:${prop}`;
+      let map = this.indexData.get(key);
+      if (!map) {
+        map = new Map();
+        this.indexData.set(key, map);
+      }
+      if (idx.unique) {
+        map.set(val, node);
+      } else {
+        const arr = (map.get(val) as NodeRecord[] | undefined) ?? [];
+        arr.push(node);
+        map.set(val, arr);
+      }
+    }
     return node;
   }
 
   async deleteNode(id: number | string): Promise<void> {
     const target = this.txData ?? this.data;
+    const node = target.nodes.find(n => n.id === id);
     target.nodes = target.nodes.filter(n => n.id !== id);
+    if (node) {
+      for (const idx of this.indexes) {
+        if (idx.properties.length !== 1) continue;
+        const prop = idx.properties[0];
+        if (idx.label && !node.labels.includes(idx.label)) continue;
+        const val = node.properties[prop];
+        if (val === undefined) continue;
+        const key = `${idx.label ?? ''}:${prop}`;
+        const map = this.indexData.get(key);
+        if (!map) continue;
+        if (idx.unique) {
+          map.delete(val);
+        } else {
+          const arr = map.get(val) as NodeRecord[] | undefined;
+          if (arr) {
+            const idxPos = arr.findIndex(n => n.id === node.id);
+            if (idxPos >= 0) arr.splice(idxPos, 1);
+            if (arr.length === 0) map.delete(val); else map.set(val, arr);
+          }
+        }
+      }
+    }
     target.relationships = target.relationships.filter(r => r.startNode !== id && r.endNode !== id);
   }
 
@@ -60,7 +139,34 @@ export class JsonAdapter implements StorageAdapter {
     const target = this.txData ?? this.data;
     const node = target.nodes.find(n => n.id === id);
     if (!node) throw new Error('node not found');
-    Object.assign(node.properties, properties);
+    for (const [k, v] of Object.entries(properties)) {
+      for (const idx of this.indexes) {
+        if (idx.properties.length !== 1 || idx.properties[0] !== k) continue;
+        if (idx.label && !node.labels.includes(idx.label)) continue;
+        const key = `${idx.label ?? ''}:${k}`;
+        const map = this.indexData.get(key);
+        if (map) {
+          const oldVal = node.properties[k];
+          if (idx.unique) {
+            if (oldVal !== undefined) map.delete(oldVal);
+            map.set(v, node);
+          } else {
+            if (oldVal !== undefined) {
+              const arr = map.get(oldVal) as NodeRecord[] | undefined;
+              if (arr) {
+                const pos = arr.findIndex(n => n.id === node.id);
+                if (pos >= 0) arr.splice(pos, 1);
+                if (arr.length === 0) map.delete(oldVal); else map.set(oldVal, arr);
+              }
+            }
+            const arr2 = (map.get(v) as NodeRecord[] | undefined) ?? [];
+            arr2.push(node);
+            map.set(v, arr2);
+          }
+        }
+      }
+      node.properties[k] = v;
+    }
   }
 
   async findNode(labels: string[], properties: Record<string, unknown>): Promise<NodeRecord | null> {
@@ -79,6 +185,29 @@ export class JsonAdapter implements StorageAdapter {
       if (ok) return node;
     }
     return null;
+  }
+
+  async *indexLookup(
+    label: string | undefined,
+    property: string,
+    value: unknown
+  ): AsyncIterable<NodeRecord> {
+    const key = `${label ?? ''}:${property}`;
+    const srcMap = this.indexData.get(key);
+    if (!srcMap) return;
+    const entry = srcMap.get(value);
+    if (!entry) return;
+    if (Array.isArray(entry)) {
+      for (const node of entry) {
+        yield node;
+      }
+    } else {
+      yield entry;
+    }
+  }
+
+  async listIndexes(): Promise<IndexMetadata[]> {
+    return this.indexes;
   }
 
   // Relationship APIs left unimplemented for this MVP
