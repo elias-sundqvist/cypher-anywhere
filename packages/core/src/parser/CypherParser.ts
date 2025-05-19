@@ -4,6 +4,7 @@ export interface MatchReturnQuery {
   labels?: string[];
   properties?: Record<string, unknown>;
   where?: WhereClause;
+  returnExpression: Expression;
 }
 
 export interface CreateQuery {
@@ -378,6 +379,13 @@ class Parser {
     return undefined;
   }
 
+  private parseReturnExpression(): Expression | undefined {
+    if (this.optional('keyword', 'RETURN')) {
+      return this.parseValue();
+    }
+    return undefined;
+  }
+
   private parseMatchChain(start: {
     variable?: string;
     labels?: string[];
@@ -515,9 +523,15 @@ class Parser {
     if (!next || next.type !== 'keyword') throw new Error('Expected keyword');
     if (next.value === 'RETURN') {
       this.consume('keyword', 'RETURN');
-      const ret = this.parseIdentifier();
-      if (ret !== pattern.variable) throw new Error('Parse error: return variable mismatch');
-      return { type: 'MatchReturn', variable: pattern.variable, labels: pattern.labels, properties: pattern.properties, where };
+      const expr = this.parseValue();
+      return {
+        type: 'MatchReturn',
+        variable: pattern.variable,
+        labels: pattern.labels,
+        properties: pattern.properties,
+        where,
+        returnExpression: expr,
+      };
     }
     if (next.value === 'DELETE') {
       this.consume('keyword', 'DELETE');
