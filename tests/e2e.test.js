@@ -266,3 +266,25 @@ runOnAdapters('repeated merge node does not duplicate', async engine => {
   for await (const row of engine.run('MATCH (n:Person {name:"Alice"}) RETURN n')) out.push(row.n);
   assert.strictEqual(out.length, 1);
 });
+
+runOnAdapters('set property from other nodes via concatenation', async engine => {
+  const script =
+    'MATCH (a:Person {name:"Alice"}) RETURN a; ' +
+    'MATCH (b:Person {name:"Bob"}) RETURN b; ' +
+    'MATCH (m:Movie {title:"The Matrix"}) SET m.tag = a.name + "-" + b.name RETURN m';
+  let row;
+  for await (const r of engine.run(script)) row = r;
+  assert.strictEqual(row.m.properties.tag, 'Alice-Bob');
+});
+
+runOnAdapters('set property on multiple nodes using expression', async engine => {
+  const script =
+    'MATCH (g:Genre {name:"Action"}) RETURN g; ' +
+    'MATCH (p:Person) SET p.label = p.name + ":" + g.name RETURN p';
+  const out = [];
+  for await (const row of engine.run(script)) if (row.p) out.push(row.p);
+  assert.strictEqual(out.length, 3);
+  for (const p of out) {
+    assert.strictEqual(p.properties.label, `${p.properties.name}:Action`);
+  }
+});

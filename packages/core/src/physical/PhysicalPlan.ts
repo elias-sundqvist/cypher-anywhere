@@ -4,6 +4,23 @@ import {
   NodeRecord,
   RelRecord,
 } from '../storage/StorageAdapter';
+import { Expression } from '../parser/CypherParser';
+
+function evalExpr(expr: Expression, vars: Map<string, NodeRecord | RelRecord>): any {
+  switch (expr.type) {
+    case 'Literal':
+      return expr.value;
+    case 'Property': {
+      const rec = vars.get(expr.variable) as NodeRecord | RelRecord | undefined;
+      if (!rec) throw new Error(`Unbound variable ${expr.variable}`);
+      return rec.properties[expr.property];
+    }
+    case 'Add':
+      return String(evalExpr(expr.left, vars)) + String(evalExpr(expr.right, vars));
+    default:
+      throw new Error('Unknown expression');
+  }
+}
 
 export type PhysicalPlan = (
   vars: Map<string, NodeRecord | RelRecord>
@@ -136,13 +153,13 @@ export function logicalToPhysical(
               }
               if (!ok) continue;
             }
-            await adapter.updateRelationshipProperties(rel.id, { [plan.property]: plan.value });
+            vars.set(plan.variable, rel);
+            const val = evalExpr(plan.value, vars);
+            await adapter.updateRelationshipProperties(rel.id, { [plan.property]: val });
+            rel.properties[plan.property] = val;
             if (plan.returnVariable) {
-              rel.properties[plan.property] = plan.value;
-              vars.set(plan.variable, rel);
               yield { [plan.variable]: rel };
             }
-            break;
           }
         } else {
           if (!adapter.scanNodes || !adapter.updateNodeProperties)
@@ -158,13 +175,13 @@ export function logicalToPhysical(
               }
             }
             if (!ok) continue;
-            await adapter.updateNodeProperties(node.id, { [plan.property]: plan.value });
+            vars.set(plan.variable, node);
+            const val = evalExpr(plan.value, vars);
+            await adapter.updateNodeProperties(node.id, { [plan.property]: val });
+            node.properties[plan.property] = val;
             if (plan.returnVariable) {
-              node.properties[plan.property] = plan.value;
-              vars.set(plan.variable, node);
               yield { [plan.variable]: node };
             }
-            break;
           }
         }
         break;
