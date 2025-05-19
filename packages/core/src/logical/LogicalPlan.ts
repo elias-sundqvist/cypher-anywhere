@@ -7,6 +7,7 @@ import {
   MatchSetQuery,
   CreateRelQuery,
   MergeRelQuery,
+  ForeachQuery,
 } from '../parser/CypherParser';
 
 // Logical plan nodes mirror the parsed AST for now but live in a separate layer
@@ -18,7 +19,8 @@ export type LogicalPlan =
   | LogicalMatchDelete
   | LogicalMatchSet
   | LogicalCreateRel
-  | LogicalMergeRel;
+  | LogicalMergeRel
+  | LogicalForeach;
 
 export type LogicalMatchReturn = MatchReturnQuery;
 export type LogicalCreate = CreateQuery;
@@ -27,6 +29,7 @@ export type LogicalMatchDelete = MatchDeleteQuery;
 export type LogicalMatchSet = MatchSetQuery;
 export type LogicalCreateRel = CreateRelQuery;
 export type LogicalMergeRel = MergeRelQuery;
+export type LogicalForeach = ForeachQuery;
 
 export function astToLogical(ast: CypherAST): LogicalPlan {
   // In this MVP the AST shape already matches the logical plan
