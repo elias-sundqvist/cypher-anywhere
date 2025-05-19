@@ -126,28 +126,85 @@ export function logicalToPhysical(
   return async function* (vars: Map<string, any>, params: Record<string, any>) {
     switch (plan.type) {
       case 'MatchReturn': {
-        const rows: { row: Record<string, unknown>; order?: any; node: NodeRecord }[] = [];
-        const collect = async (node: NodeRecord) => {
+        const isAgg = (e: Expression): boolean =>
+          ['Count', 'Sum', 'Min', 'Max', 'Avg'].includes(e.type);
+        const hasAgg = plan.returnItems.some(r => isAgg(r.expression));
+        const rows: { row: Record<string, unknown>; order?: any; node?: NodeRecord }[] = [];
+        const aliasFor = (item: typeof plan.returnItems[number], idx: number): string => {
+          if (item.alias) return item.alias;
+          if (item.expression.type === 'Variable') return item.expression.name;
+          return plan.returnItems.length === 1 ? 'value' : `value${idx}`;
+        };
+
+        const groups = new Map<string, { row: Record<string, unknown>; aggs: any[]; node?: NodeRecord }>();
+
+        const collectAgg = async (node: NodeRecord) => {
+          vars.set(plan.variable, node);
+          if (plan.where && !evalWhere(plan.where, vars, params)) return;
+          const keyParts: unknown[] = [];
+          for (const item of plan.returnItems) {
+            if (!isAgg(item.expression)) keyParts.push(evalExpr(item.expression, vars, params));
+          }
+          const key = JSON.stringify(keyParts);
+          let group = groups.get(key);
+          if (!group) {
+            const row: Record<string, unknown> = {};
+            let i = 0;
+            plan.returnItems.forEach((item, idx) => {
+              if (!isAgg(item.expression)) {
+                row[aliasFor(item, idx)] = keyParts[i++];
+              }
+            });
+            group = { row, aggs: [], node };
+            groups.set(key, group);
+          }
+          plan.returnItems.forEach((item, idx) => {
+            if (!isAgg(item.expression)) return;
+            const expr = item.expression;
+            const agg = (group!.aggs[idx] = group!.aggs[idx] ?? { count: 0, sum: 0 });
+            switch (expr.type) {
+              case 'Count':
+                agg.count++;
+                break;
+              case 'Sum': {
+                const v = evalExpr(expr.expression, vars, params);
+                if (typeof v === 'number') agg.sum += v;
+                break;
+              }
+              case 'Min': {
+                const v = evalExpr(expr.expression, vars, params);
+                if (agg.min === undefined || v < agg.min) agg.min = v;
+                break;
+              }
+              case 'Max': {
+                const v = evalExpr(expr.expression, vars, params);
+                if (agg.max === undefined || v > agg.max) agg.max = v;
+                break;
+              }
+              case 'Avg': {
+                const v = evalExpr(expr.expression, vars, params);
+                if (typeof v === 'number') {
+                  agg.sum += v;
+                  agg.count++;
+                }
+                break;
+              }
+            }
+          });
+        };
+
+        const collectSimple = async (node: NodeRecord) => {
           vars.set(plan.variable, node);
           if (plan.where && !evalWhere(plan.where, vars, params)) return;
           const row: Record<string, unknown> = {};
           plan.returnItems.forEach((item, idx) => {
-            const val = evalExpr(item.expression, vars, params);
-            let key: string;
-            if (item.alias) {
-              key = item.alias;
-            } else if (item.expression.type === 'Variable') {
-              key = item.expression.name;
-            } else if (plan.returnItems.length === 1) {
-              key = 'value';
-            } else {
-              key = `value${idx}`;
-            }
-            row[key] = val;
+            row[aliasFor(item, idx)] = evalExpr(item.expression, vars, params);
           });
           const order = plan.orderBy ? evalExpr(plan.orderBy, vars, params) : undefined;
           rows.push({ row, order, node });
         };
+
+        const collect = hasAgg ? collectAgg : collectSimple;
 
         let usedIndex = false;
         if (
@@ -189,7 +246,36 @@ export function logicalToPhysical(
           }
         }
 
-        if (plan.orderBy) {
+        if (hasAgg) {
+          for (const group of groups.values()) {
+            plan.returnItems.forEach((item, idx) => {
+              if (!isAgg(item.expression)) return;
+              const agg = group.aggs[idx];
+              let val: any;
+              switch (item.expression.type) {
+                case 'Count':
+                  val = agg.count;
+                  break;
+                case 'Sum':
+                  val = agg.sum;
+                  break;
+                case 'Min':
+                  val = agg.min;
+                  break;
+                case 'Max':
+                  val = agg.max;
+                  break;
+                case 'Avg':
+                  val = agg.count ? agg.sum / agg.count : null;
+                  break;
+              }
+              group.row[aliasFor(item, idx)] = val;
+            });
+            rows.push({ row: group.row, node: group.node });
+          }
+        }
+
+        if (plan.orderBy && !hasAgg) {
           rows.sort((a, b) => {
             if (a.order === b.order) return 0;
             if (a.order === undefined) return 1;
@@ -202,7 +288,7 @@ export function logicalToPhysical(
         let end = rows.length;
         if (plan.limit !== undefined) end = Math.min(end, start + plan.limit);
         for (let i = start; i < end; i++) {
-          vars.set(plan.variable, rows[i].node);
+          vars.set(plan.variable, rows[i].node as NodeRecord);
           yield rows[i].row;
         }
         break;
