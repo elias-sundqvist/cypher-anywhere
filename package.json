@@ -6,8 +6,9 @@
     "packages/adapters/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
-    "test": "npm run test --workspaces"
+    "build": "npm run build:packages",
+    "build:packages": "tsc -b packages/core packages/adapters/json-adapter",
+    "test": "npm run build && node --test tests/*.js"
   },
   "devDependencies": {
     "typescript": "^5.2.2",
