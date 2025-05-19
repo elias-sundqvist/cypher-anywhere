@@ -439,3 +439,23 @@ runOnAdapters('UNWIND nodes from path', async engine => {
   for await (const row of engine.run(script)) if (row.n) out.push(row.n);
   assert.strictEqual(out.length, 3);
 });
+
+runOnAdapters('OPTIONAL MATCH missing returns zero rows', async engine => {
+  const out = [];
+  for await (const row of engine.run('OPTIONAL MATCH (n:Missing) RETURN n')) out.push(row.n);
+  assert.strictEqual(out.length, 0);
+});
+
+runOnAdapters('ORDER BY with SKIP and LIMIT', async engine => {
+  const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY n.name SKIP 1 LIMIT 1';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.name);
+  assert.deepStrictEqual(out, ['Bob']);
+});
+
+runOnAdapters('RETURN multiple expressions with aliases', async engine => {
+  const q = 'MATCH (m:Movie) RETURN m.title AS title, m.released AS year ORDER BY year';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(`${row.title}-${row.year}`);
+  assert.deepStrictEqual(out, ['The Matrix-1999', 'John Wick-2014']);
+});

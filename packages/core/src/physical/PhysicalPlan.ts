@@ -91,9 +91,33 @@ export function logicalToPhysical(
   return async function* (vars: Map<string, any>) {
     switch (plan.type) {
       case 'MatchReturn': {
+        const rows: { row: Record<string, unknown>; order?: any; node: NodeRecord }[] = [];
+        const collect = async (node: NodeRecord) => {
+          vars.set(plan.variable, node);
+          if (plan.where && !evalWhere(plan.where, vars)) return;
+          const row: Record<string, unknown> = {};
+          plan.returnItems.forEach((item, idx) => {
+            const val = evalExpr(item.expression, vars);
+            let key: string;
+            if (item.alias) {
+              key = item.alias;
+            } else if (item.expression.type === 'Variable') {
+              key = item.expression.name;
+            } else if (plan.returnItems.length === 1) {
+              key = 'value';
+            } else {
+              key = `value${idx}`;
+            }
+            row[key] = val;
+          });
+          const order = plan.orderBy ? evalExpr(plan.orderBy, vars) : undefined;
+          rows.push({ row, order, node });
+        };
+
         let usedIndex = false;
         if (
-          plan.labels && plan.labels.length > 0 &&
+          plan.labels &&
+          plan.labels.length > 0 &&
           plan.properties &&
           Object.keys(plan.properties).length === 1 &&
           adapter.indexLookup &&
@@ -107,17 +131,7 @@ export function logicalToPhysical(
           );
           if (found) {
             for await (const node of adapter.indexLookup(label, prop, value)) {
-              vars.set(plan.variable, node);
-              if (plan.where && !evalWhere(plan.where, vars)) continue;
-              const val = evalExpr(plan.returnExpression, vars);
-              if (
-                plan.returnExpression.type === 'Variable' &&
-                plan.returnExpression.name === plan.variable
-              ) {
-                yield { [plan.variable]: val };
-              } else {
-                yield { value: val };
-              }
+              await collect(node);
             }
             usedIndex = true;
           }
@@ -135,18 +149,25 @@ export function logicalToPhysical(
               }
               if (!ok) continue;
             }
-            vars.set(plan.variable, node);
-            if (plan.where && !evalWhere(plan.where, vars)) continue;
-            const val = evalExpr(plan.returnExpression, vars);
-            if (
-              plan.returnExpression.type === 'Variable' &&
-              plan.returnExpression.name === plan.variable
-            ) {
-              yield { [plan.variable]: val };
-            } else {
-              yield { value: val };
-            }
+            await collect(node);
           }
+        }
+
+        if (plan.orderBy) {
+          rows.sort((a, b) => {
+            if (a.order === b.order) return 0;
+            if (a.order === undefined) return 1;
+            if (b.order === undefined) return -1;
+            return a.order > b.order ? 1 : -1;
+          });
+        }
+
+        const start = plan.skip ?? 0;
+        let end = rows.length;
+        if (plan.limit !== undefined) end = Math.min(end, start + plan.limit);
+        for (let i = start; i < end; i++) {
+          vars.set(plan.variable, rows[i].node);
+          yield rows[i].row;
         }
         break;
       }

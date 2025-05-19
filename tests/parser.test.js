@@ -8,14 +8,18 @@ test('parse MATCH (n) RETURN n', () => {
   assert.strictEqual(ast.type, 'MatchReturn');
   assert.strictEqual(ast.variable, 'n');
   assert.deepStrictEqual(ast.labels, []);
-  assert.deepStrictEqual(ast.returnExpression, { type: 'Variable', name: 'n' });
+  assert.deepStrictEqual(ast.returnItems, [
+    { expression: { type: 'Variable', name: 'n' }, alias: undefined }
+  ]);
 });
 
 // Match with label
 test('parse MATCH (n:Person) RETURN n', () => {
   const ast = parse('MATCH (n:Person) RETURN n');
   assert.deepStrictEqual(ast.labels, ['Person']);
-  assert.deepStrictEqual(ast.returnExpression, { type: 'Variable', name: 'n' });
+  assert.deepStrictEqual(ast.returnItems, [
+    { expression: { type: 'Variable', name: 'n' }, alias: undefined }
+  ]);
 });
 
 // Create node
