@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Cypher Anywhere Demo</title>
+  <style>
+    textarea { width: 100%; }
+    pre { background: #f0f0f0; padding: 1em; }
+  </style>
+</head>
+<body>
+  <h1>Cypher Anywhere Demo</h1>
+  <div>
+    <textarea id="query" rows="6" placeholder="Write Cypher query here"></textarea>
+    <br>
+    <button id="runBtn">Run Query</button>
+  </div>
+  <h2>Results</h2>
+  <pre id="results"></pre>
+  <h2>Graph Data</h2>
+  <pre id="graph"></pre>
+  <script type="module" src="bundle.js"></script>
+</body>
+</html>
