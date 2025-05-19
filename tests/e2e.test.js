@@ -310,6 +310,24 @@ runOnAdapters('match relationship with WHERE', async engine => {
   assert.strictEqual(out[0].properties.flag, true);
 });
 
+runOnAdapters('match with WHERE using AND', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (n:Person) WHERE n.name = "Alice" AND n.name = "Bob" RETURN n')) out.push(row.n);
+  assert.strictEqual(out.length, 0);
+});
+
+runOnAdapters('match with WHERE using OR', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (n:Person) WHERE n.name = "Alice" OR n.name = "Bob" RETURN n')) out.push(row.n);
+  assert.strictEqual(out.length, 2);
+});
+
+runOnAdapters('match with WHERE using NOT', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (n:Person) WHERE NOT n.name = "Alice" RETURN n')) out.push(row.n);
+  assert.strictEqual(out.length, 2);
+});
+
 runOnAdapters('FOREACH create multiple nodes', async engine => {
   for await (const _ of engine.run('FOREACH x IN [1,2,3] CREATE (n:Batch)')) {}
   const out = [];

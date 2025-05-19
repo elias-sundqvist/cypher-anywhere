@@ -76,17 +76,29 @@ function evalWhere(
   vars: Map<string, any>,
   params: Record<string, any>
 ): boolean {
-  const l = evalExpr(where.left, vars, params);
-  const r = evalExpr(where.right, vars, params);
-  switch (where.operator) {
-    case '=':
-      return l === r;
-    case '>':
-      return (l as any) > (r as any);
-    case '>=':
-      return (l as any) >= (r as any);
+  switch (where.type) {
+    case 'Condition': {
+      const l = evalExpr(where.left, vars, params);
+      const r = evalExpr(where.right, vars, params);
+      switch (where.operator) {
+        case '=':
+          return l === r;
+        case '>':
+          return (l as any) > (r as any);
+        case '>=':
+          return (l as any) >= (r as any);
+        default:
+          throw new Error('Unknown operator');
+      }
+    }
+    case 'And':
+      return evalWhere(where.left, vars, params) && evalWhere(where.right, vars, params);
+    case 'Or':
+      return evalWhere(where.left, vars, params) || evalWhere(where.right, vars, params);
+    case 'Not':
+      return !evalWhere(where.clause, vars, params);
     default:
-      throw new Error('Unknown operator');
+      throw new Error('Unknown where clause');
   }
 }
 
