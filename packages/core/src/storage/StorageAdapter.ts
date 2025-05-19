@@ -36,6 +36,16 @@ export interface StorageAdapter {
   /** Optional: find a node by labels and exact property match. */
   findNode?(labels: string[], properties: Record<string, unknown>): Promise<NodeRecord | null>;
 
+  /** Optional: return all nodes matching the given equality predicates using an index if available. */
+  indexLookup?(
+    label: string | undefined,
+    property: string,
+    value: unknown
+  ): AsyncIterable<NodeRecord>;
+
+  /** Optional: list available indexes to aid the planner. */
+  listIndexes?(): Promise<IndexMetadata[]>;
+
   getRelationshipById?(id: number | string): Promise<RelRecord | null>;
   scanRelationships?(): AsyncIterable<RelRecord>;
 

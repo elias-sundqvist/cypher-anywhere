@@ -16,20 +16,46 @@ export function logicalToPhysical(
   return async function* (vars: Map<string, NodeRecord | RelRecord>) {
     switch (plan.type) {
       case 'MatchReturn': {
-        const scan = adapter.scanNodes(plan.label ? { label: plan.label } : {});
-        for await (const node of scan) {
-          if (plan.properties) {
-            let ok = true;
-            for (const [k, v] of Object.entries(plan.properties)) {
-              if (node.properties[k] !== v) {
-                ok = false;
-                break;
-              }
+        let usedIndex = false;
+        if (
+          plan.label &&
+          plan.properties &&
+          Object.keys(plan.properties).length === 1 &&
+          adapter.indexLookup &&
+          adapter.listIndexes
+        ) {
+          const [prop, value] = Object.entries(plan.properties)[0];
+          const indexes = await adapter.listIndexes();
+          const found = indexes.find(
+            i =>
+              i.label === plan.label &&
+              i.properties.length === 1 &&
+              i.properties[0] === prop
+          );
+          if (found) {
+            for await (const node of adapter.indexLookup(plan.label, prop, value)) {
+              vars.set(plan.variable, node);
+              yield { [plan.variable]: node };
             }
-            if (!ok) continue;
+            usedIndex = true;
           }
-          vars.set(plan.variable, node);
-          yield { [plan.variable]: node };
+        }
+        if (!usedIndex) {
+          const scan = adapter.scanNodes(plan.label ? { label: plan.label } : {});
+          for await (const node of scan) {
+            if (plan.properties) {
+              let ok = true;
+              for (const [k, v] of Object.entries(plan.properties)) {
+                if (node.properties[k] !== v) {
+                  ok = false;
+                  break;
+                }
+              }
+              if (!ok) continue;
+            }
+            vars.set(plan.variable, node);
+            yield { [plan.variable]: node };
+          }
         }
         break;
       }
