@@ -12,59 +12,38 @@ CypherAnywhere is a modular, storage-agnostic library that lets you run Cypher q
 - **Typed & Testable Core:** TypeScript implementation with thorough unit tests and tracing hooks.
 - **Small-Footprint MVP:** Focused on read-only queries with pattern matching, filtering, projections, and aggregations.
 
-## Architecture
-
-```
-┌────────────┐    ┌────────────┐    ┌─────────────────────┐    ┌──────────────┐
-│  Cypher    │    │ Logical    │    │   Physical Plan     │    │ Storage       │
-│  Parser    │ →  │  Plan      │ →  │   & Execution       │ →  │ Adapter(s)    │
-│  & AST     │    │ Generator  │    │   Engine            │    │ (JSON | SQL…) │
-└────────────┘    └────────────┘    └─────────────────────┘    └──────────────┘
-```
-
-The parser produces an abstract syntax tree that is transformed into a logical plan. A rule-based rewriter and cost-based optimizer apply metadata supplied by the adapter. The physical plan is then executed using iterators that access the underlying store through the adapter interface.
-
 ## Project Layout
 
-```
+```text
 cypher-anywhere/
 ├── packages/
-│   ├── core/                # parser, logical planner, optimizer, engine
-│   ├── adapters/            # storage adapters such as json-adapter, sql-adapter
-│   ├── cli/                 # command-line interface
-│   └── examples/
-├── docs/                    # documentation site (Docusaurus)
+│   ├── core/                # parser, logical planner, engine
+│   └── adapters/            # storage adapters (json-adapter, ...)
 ├── tests/                   # Jest test suites
-└── benchmarks/              # micro & macro benchmarks
+└── design_document.md       # architecture overview
 ```
 
 ## Example
 
+This repository currently contains a small proof-of-concept implementation. Only a trivial query form is supported:
+
 ```ts
-import { CypherEngine } from "@cypher-anywhere/core";
-import { JsonAdapter } from "@cypher-anywhere/json-adapter";
+import { CypherEngine } from '@cypher-anywhere/core';
+import { JsonAdapter } from '@cypher-anywhere/json-adapter';
 
-const adapter = new JsonAdapter({
-  datasetPath: "./data/movies.json",
-  indexes: [
-    { label: "Movie", properties: ["title"], unique: false },
-    { label: "Person", properties: ["name"], unique: false }
-  ]
-});
-
+const adapter = new JsonAdapter({ datasetPath: './tests/data/sample.json' });
 const engine = new CypherEngine({ adapter });
 
-const result = await engine.run(
-  `MATCH (p:Person {name: $name})-[:ACTED_IN]->(m:Movie)
-   WHERE m.released >= $year
-   RETURN m.title AS title, m.released AS year` ,
-  { name: "Keanu Reeves", year: 1999 }
-);
-
-for await (const row of result) {
-  console.log(row.title, row.year);
+for await (const row of engine.run('MATCH (n) RETURN n')) {
+  console.log(row.n);
 }
 ```
 
+To run the example:
+
+```bash
+npm install
+npm test    # executes the Jest suite
+```
 
 For more details, see the [design document](./design_document.md).

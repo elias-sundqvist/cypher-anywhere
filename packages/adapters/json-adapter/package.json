@@ -1,0 +1,13 @@
+{
+  "name": "@cypher-anywhere/json-adapter",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "@cypher-anywhere/core": "0.0.1"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "jest"
+  }
+}
