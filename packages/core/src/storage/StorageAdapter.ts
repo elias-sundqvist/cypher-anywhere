@@ -27,11 +27,26 @@ export interface StorageAdapter {
   /** Optional: create a new node. Returns the created record. */
   createNode?(labels: string[], properties: Record<string, unknown>): Promise<NodeRecord>;
 
+  /** Optional: delete a node by id */
+  deleteNode?(id: number | string): Promise<void>;
+
+  /** Optional: update properties on an existing node */
+  updateNodeProperties?(id: number | string, properties: Record<string, unknown>): Promise<void>;
+
   /** Optional: find a node by labels and exact property match. */
   findNode?(labels: string[], properties: Record<string, unknown>): Promise<NodeRecord | null>;
 
   getRelationshipById?(id: number | string): Promise<RelRecord | null>;
   scanRelationships?(): AsyncIterable<RelRecord>;
+
+  /** Optional: create a new relationship */
+  createRelationship?(type: string, startNode: number | string, endNode: number | string, properties: Record<string, unknown>): Promise<RelRecord>;
+
+  /** Optional: delete a relationship by id */
+  deleteRelationship?(id: number | string): Promise<void>;
+
+  /** Optional: update properties on an existing relationship */
+  updateRelationshipProperties?(id: number | string, properties: Record<string, unknown>): Promise<void>;
 
   /** Optional transactional hooks */
   beginTransaction?(): Promise<TransactionCtx>;

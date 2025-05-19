@@ -50,6 +50,19 @@ export class JsonAdapter implements StorageAdapter {
     return node;
   }
 
+  async deleteNode(id: number | string): Promise<void> {
+    const target = this.txData ?? this.data;
+    target.nodes = target.nodes.filter(n => n.id !== id);
+    target.relationships = target.relationships.filter(r => r.startNode !== id && r.endNode !== id);
+  }
+
+  async updateNodeProperties(id: number | string, properties: Record<string, unknown>): Promise<void> {
+    const target = this.txData ?? this.data;
+    const node = target.nodes.find(n => n.id === id);
+    if (!node) throw new Error('node not found');
+    Object.assign(node.properties, properties);
+  }
+
   async findNode(labels: string[], properties: Record<string, unknown>): Promise<NodeRecord | null> {
     const src = this.txData ?? this.data;
     for (const node of src.nodes) {
@@ -79,6 +92,27 @@ export class JsonAdapter implements StorageAdapter {
     for (const rel of src.relationships) {
       yield rel;
     }
+  }
+
+  async createRelationship(type: string, startNode: number | string, endNode: number | string, properties: Record<string, unknown>): Promise<RelRecord> {
+    const target = this.txData ?? this.data;
+    const maxId = target.relationships.reduce((m, r) => Math.max(m, Number(r.id)), 0);
+    const id = maxId + 1;
+    const rel: RelRecord = { id, type, startNode, endNode, properties };
+    target.relationships.push(rel);
+    return rel;
+  }
+
+  async deleteRelationship(id: number | string): Promise<void> {
+    const target = this.txData ?? this.data;
+    target.relationships = target.relationships.filter(r => r.id !== id);
+  }
+
+  async updateRelationshipProperties(id: number | string, properties: Record<string, unknown>): Promise<void> {
+    const target = this.txData ?? this.data;
+    const rel = target.relationships.find(r => r.id === id);
+    if (!rel) throw new Error('relationship not found');
+    Object.assign(rel.properties, properties);
   }
 
   async beginTransaction(): Promise<TransactionCtx> {
