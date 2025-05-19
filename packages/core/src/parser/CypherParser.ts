@@ -56,13 +56,24 @@ export interface CreateRelQuery {
   returnVariable?: string;
 }
 
+export interface MergeRelQuery {
+  type: 'MergeRel';
+  relVariable: string;
+  relType: string;
+  relProperties?: Record<string, unknown>;
+  startVariable: string;
+  endVariable: string;
+  returnVariable?: string;
+}
+
 export type CypherAST =
   | MatchReturnQuery
   | CreateQuery
   | MergeQuery
   | MatchDeleteQuery
   | MatchSetQuery
-  | CreateRelQuery;
+  | CreateRelQuery
+  | MergeRelQuery;
 
 interface Token {
   type: 'keyword' | 'identifier' | 'number' | 'string' | 'punct';
@@ -355,14 +366,43 @@ class Parser {
     return { type: 'Create', variable: start.variable, label: start.label, properties: start.properties, returnVariable: ret };
   }
 
-  private parseMerge(): MergeQuery {
+  private parseMerge(): MergeQuery | MergeRelQuery {
     this.consume('keyword', 'MERGE');
-    const pattern = this.parseNodePattern();
+    const start = this.parseMaybeNodePattern();
+    if (this.current()?.value === '-') {
+      this.consume('punct', '-');
+      this.consume('punct', '[');
+      const relVar = this.parseIdentifier();
+      this.consume('punct', ':');
+      const relType = this.parseIdentifier();
+      let relProps: Record<string, unknown> | undefined;
+      if (this.optional('punct', '{')) {
+        relProps = this.parseProperties();
+        this.consume('punct', '}');
+      }
+      this.consume('punct', ']');
+      this.consume('punct', '-');
+      this.consume('punct', '>');
+      const end = this.parseMaybeNodePattern();
+      const ret = this.parseReturnVariable();
+      if (ret && ret !== relVar) throw new Error('Parse error: return variable mismatch');
+      if (!start.variable || !end.variable) throw new Error('Parse error: node variables required');
+      return {
+        type: 'MergeRel',
+        relVariable: relVar,
+        relType,
+        relProperties: relProps,
+        startVariable: start.variable,
+        endVariable: end.variable,
+        returnVariable: ret,
+      };
+    }
+    if (!start.variable) throw new Error('Parse error: node variable required');
     const ret = this.parseReturnVariable();
-    if (ret && ret !== pattern.variable) {
+    if (ret && ret !== start.variable) {
       throw new Error('Parse error: return variable mismatch');
     }
-    return { type: 'Merge', variable: pattern.variable, label: pattern.label, properties: pattern.properties, returnVariable: ret };
+    return { type: 'Merge', variable: start.variable, label: start.label, properties: start.properties, returnVariable: ret };
   }
 }
 
@@ -374,4 +414,12 @@ export function parse(query: string): CypherAST {
     throw new Error('Unexpected tokens at end of query');
   }
   return ast;
+}
+
+export function parseMany(query: string): CypherAST[] {
+  return query
+    .split(';')
+    .map(q => q.trim())
+    .filter(q => q.length > 0)
+    .map(q => parse(q));
 }

@@ -117,3 +117,19 @@ test('CypherEngine relationship lifecycle via queries', async () => {
   for await (const row of engine.run('MATCH ()-[r:REL]->() RETURN r')) { out.push(row); }
   assert.strictEqual(out.length, 0);
 });
+
+test('CypherEngine multi-statement merge creates relationship between matches', async () => {
+  const adapter = new JsonAdapter({ datasetPath });
+  const engine = new CypherEngine({ adapter });
+  const script = `
+    MATCH (p:Person {name:"Keanu Reeves"}) RETURN p;
+    MATCH (m:Movie {title:"The Matrix"}) RETURN m;
+    MERGE (p)-[r:ACTED_IN]->(m) RETURN r
+  `;
+  const res = [];
+  for await (const row of engine.run(script)) {
+    if (row.r) res.push(row.r);
+  }
+  assert.strictEqual(res.length, 1);
+  assert.strictEqual(res[0].type, 'ACTED_IN');
+});
