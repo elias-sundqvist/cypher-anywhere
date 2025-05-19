@@ -1,10 +1,18 @@
+export interface ReturnItem {
+  expression: Expression;
+  alias?: string;
+}
+
 export interface MatchReturnQuery {
   type: 'MatchReturn';
   variable: string;
   labels?: string[];
   properties?: Record<string, unknown>;
   where?: WhereClause;
-  returnExpression: Expression;
+  returnItems: ReturnItem[];
+  orderBy?: Expression;
+  skip?: number;
+  limit?: number;
 }
 
 export interface CreateQuery {
@@ -165,7 +173,7 @@ function tokenize(input: string): Token[] {
       i += ws[0].length;
       continue;
     }
-    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS)\b/i.exec(rest);
+    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH)\b/i.exec(rest);
     if (keyword) {
       tokens.push({ type: 'keyword', value: keyword[1].toUpperCase() });
       i += keyword[0].length;
@@ -232,6 +240,10 @@ class Parser {
       throw new Error('Expected query keyword');
     }
     if (tok.value === 'MATCH') return this.parseMatch();
+    if (tok.value === 'OPTIONAL') {
+      this.consume('keyword', 'OPTIONAL');
+      return this.parseMatch();
+    }
     if (tok.value === 'CREATE') return this.parseCreate();
     if (tok.value === 'MERGE') return this.parseMerge();
     if (tok.value === 'FOREACH') return this.parseForeach();
@@ -408,6 +420,44 @@ class Parser {
     return undefined;
   }
 
+  private parseReturnClause(): {
+    items: ReturnItem[];
+    orderBy?: Expression;
+    skip?: number;
+    limit?: number;
+  } {
+    this.consume('keyword', 'RETURN');
+    const items: ReturnItem[] = [];
+    let idx = 0;
+    while (true) {
+      const expr = this.parseValue();
+      let alias: string | undefined;
+      if (this.optional('keyword', 'AS')) {
+        alias = this.parseIdentifier();
+      }
+      items.push({ expression: expr, alias });
+      idx++;
+      if (!this.optional('punct', ',')) break;
+    }
+    let orderBy: Expression | undefined;
+    if (this.current()?.value === 'ORDER') {
+      this.consume('keyword', 'ORDER');
+      this.consume('keyword', 'BY');
+      orderBy = this.parseValue();
+    }
+    let skip: number | undefined;
+    if (this.current()?.value === 'SKIP') {
+      this.consume('keyword', 'SKIP');
+      skip = Number(this.consume('number').value);
+    }
+    let limit: number | undefined;
+    if (this.current()?.value === 'LIMIT') {
+      this.consume('keyword', 'LIMIT');
+      limit = Number(this.consume('number').value);
+    }
+    return { items, orderBy, skip, limit };
+  }
+
   private parseMatchChain(start: {
     variable?: string;
     labels?: string[];
@@ -544,15 +594,17 @@ class Parser {
     const next = this.current();
     if (!next || next.type !== 'keyword') throw new Error('Expected keyword');
     if (next.value === 'RETURN') {
-      this.consume('keyword', 'RETURN');
-      const expr = this.parseValue();
+      const ret = this.parseReturnClause();
       return {
         type: 'MatchReturn',
         variable: pattern.variable,
         labels: pattern.labels,
         properties: pattern.properties,
         where,
-        returnExpression: expr,
+        returnItems: ret.items,
+        orderBy: ret.orderBy,
+        skip: ret.skip,
+        limit: ret.limit,
       };
     }
     if (next.value === 'DELETE') {
