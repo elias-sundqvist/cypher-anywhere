@@ -59,5 +59,7 @@ export class CypherEngine {
       default:
         throw new Error('Query not supported in this MVP');
     }
+
+    throw new Error('Query not supported in this MVP');
   }
 }
