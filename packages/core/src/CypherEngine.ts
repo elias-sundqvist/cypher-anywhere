@@ -21,7 +21,7 @@ export class CypherEngine {
 
   async *run(query: string): AsyncIterable<Record<string, unknown>> {
     const statements = parseMany(query) as CypherAST[];
-    const vars = new Map<string, NodeRecord | RelRecord>();
+    const vars = new Map<string, any>();
     for (const ast of statements) {
       let tx: TransactionCtx | undefined;
       const isWrite =
@@ -30,7 +30,8 @@ export class CypherEngine {
         ast.type === 'MatchDelete' ||
         ast.type === 'MatchSet' ||
         ast.type === 'CreateRel' ||
-        ast.type === 'MergeRel';
+        ast.type === 'MergeRel' ||
+        ast.type === 'Foreach';
       if (isWrite && this.adapter.beginTransaction) {
         tx = await this.adapter.beginTransaction();
       }

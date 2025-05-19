@@ -288,3 +288,41 @@ runOnAdapters('set property on multiple nodes using expression', async engine =>
     assert.strictEqual(p.properties.label, `${p.properties.name}:Action`);
   }
 });
+
+runOnAdapters('match with WHERE filter', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (n:Person) WHERE n.name = "Alice" RETURN n')) out.push(row.n);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Alice');
+});
+
+runOnAdapters('match with WHERE inequality', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (m:Movie) WHERE m.released > 2000 RETURN m')) out.push(row.m);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.title, 'John Wick');
+});
+
+runOnAdapters('match relationship with WHERE', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH ()-[r:ACTED_IN]->() WHERE r.role = "Neo" SET r.flag = true RETURN r')) out.push(row.r);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.flag, true);
+});
+
+runOnAdapters('FOREACH create multiple nodes', async engine => {
+  for await (const _ of engine.run('FOREACH x IN [1,2,3] CREATE (n:Batch)')) {}
+  const out = [];
+  for await (const row of engine.run('MATCH (n:Batch) RETURN n')) out.push(row.n);
+  assert.strictEqual(out.length, 3);
+});
+
+runOnAdapters('FOREACH variable drives SET', async engine => {
+  const script =
+    'CREATE (c:Counter {num:0}) RETURN c; ' +
+    'FOREACH v IN [1,2,3] MATCH (c:Counter) SET c.num = v; ' +
+    'MATCH (c:Counter) RETURN c';
+  let last;
+  for await (const row of engine.run(script)) if (row.c) last = row.c;
+  assert.strictEqual(last.properties.num, 3);
+});
