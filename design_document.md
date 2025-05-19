@@ -190,16 +190,6 @@ for await (const row of result) {
 
 ---
 
-## 10. Road‑map
-
-| Phase       | Targets                                                       | ETA     |
-| ----------- | ------------------------------------------------------------- | ------- |
-| **0.1 MVP** | JSON adapter, basic pattern match, equality filters, `RETURN` | 2025‑08 |
-| **0.2**     | SQL adapter, rule‑based join reorder, basic indexes           | 2025‑12 |
-| **0.3**     | Cost‑based stats, cardinality estimation, range indexes       | 2026‑03 |
-| **0.4**     | Write & transactional support, MERGE/CREATE/DELETE            | 2026‑06 |
-
----
 
 ## 11. Contribution Guidelines & Licensing
 

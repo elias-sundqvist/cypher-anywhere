@@ -1,4 +1,4 @@
-import { StorageAdapter, NodeRecord } from './storage/StorageAdapter';
+import { StorageAdapter, NodeRecord, TransactionCtx } from './storage/StorageAdapter';
 import { parse, MatchReturnQuery, CreateQuery, MergeQuery, CypherAST } from './parser/CypherParser';
 
 export interface CypherEngineOptions {
@@ -14,7 +14,13 @@ export class CypherEngine {
 
   async *run(query: string): AsyncIterable<Record<string, unknown>> {
     const ast = parse(query) as CypherAST;
-    switch (ast.type) {
+    let tx: TransactionCtx | undefined;
+    const isWrite = ast.type === 'Create' || ast.type === 'Merge';
+    if (isWrite && this.adapter.beginTransaction) {
+      tx = await this.adapter.beginTransaction();
+    }
+    try {
+      switch (ast.type) {
       case 'MatchReturn': {
         const scan = this.adapter.scanNodes(ast.label ? { label: ast.label } : {});
         for await (const node of scan) {
@@ -58,6 +64,15 @@ export class CypherEngine {
       }
       default:
         throw new Error('Query not supported in this MVP');
+      }
+      if (tx && this.adapter.commit) {
+        await this.adapter.commit(tx);
+      }
+    } catch (err) {
+      if (tx && this.adapter.rollback) {
+        await this.adapter.rollback(tx);
+      }
+      throw err;
     }
   }
 }

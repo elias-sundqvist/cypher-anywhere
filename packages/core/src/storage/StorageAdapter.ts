@@ -16,6 +16,10 @@ export interface NodeScanSpec {
   label?: string;
 }
 
+export interface TransactionCtx {
+  /** adapter specific context */
+}
+
 export interface StorageAdapter {
   getNodeById(id: number | string): Promise<NodeRecord | null>;
   scanNodes(spec?: NodeScanSpec): AsyncIterable<NodeRecord>;
@@ -28,6 +32,11 @@ export interface StorageAdapter {
 
   getRelationshipById?(id: number | string): Promise<RelRecord | null>;
   scanRelationships?(): AsyncIterable<RelRecord>;
+
+  /** Optional transactional hooks */
+  beginTransaction?(): Promise<TransactionCtx>;
+  commit?(tx: TransactionCtx): Promise<void>;
+  rollback?(tx: TransactionCtx): Promise<void>;
 }
 
 export interface IndexMetadata {

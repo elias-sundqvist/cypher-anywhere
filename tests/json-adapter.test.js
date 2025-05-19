@@ -53,3 +53,16 @@ test('CypherEngine MERGE finds existing node', async () => {
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Keanu Reeves');
 });
+
+test('JsonAdapter transaction rollback discards changes', async () => {
+  const adapter = new JsonAdapter({ datasetPath });
+  const tx = await adapter.beginTransaction();
+  await adapter.createNode(['Person'], { name: 'Bob' });
+  await adapter.rollback(tx);
+  const engine = new CypherEngine({ adapter });
+  const res = [];
+  for await (const row of engine.run('MATCH (n:Person {name:"Bob"}) RETURN n')) {
+    res.push(row.n);
+  }
+  assert.strictEqual(res.length, 0);
+});

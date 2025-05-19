@@ -1,4 +1,4 @@
-import { StorageAdapter, NodeRecord, RelRecord, NodeScanSpec } from '@cypher-anywhere/core';
+import { StorageAdapter, NodeRecord, RelRecord, NodeScanSpec, TransactionCtx } from '@cypher-anywhere/core';
 import * as fs from 'fs';
 
 interface Dataset {
@@ -13,6 +13,7 @@ export interface JsonAdapterOptions {
 
 export class JsonAdapter implements StorageAdapter {
   private data: Dataset;
+  private txData?: Dataset;
 
   constructor(options: JsonAdapterOptions) {
     if (options.dataset) {
@@ -26,12 +27,14 @@ export class JsonAdapter implements StorageAdapter {
   }
 
   async getNodeById(id: number | string): Promise<NodeRecord | null> {
-    return this.data.nodes.find(n => n.id === id) || null;
+    const src = this.txData ?? this.data;
+    return src.nodes.find(n => n.id === id) || null;
   }
 
   async *scanNodes(spec: NodeScanSpec = {}): AsyncIterable<NodeRecord> {
     const { label } = spec;
-    for (const node of this.data.nodes) {
+    const src = this.txData ?? this.data;
+    for (const node of src.nodes) {
       if (!label || node.labels.includes(label)) {
         yield node;
       }
@@ -39,15 +42,17 @@ export class JsonAdapter implements StorageAdapter {
   }
 
   async createNode(labels: string[], properties: Record<string, unknown>): Promise<NodeRecord> {
-    const maxId = this.data.nodes.reduce((m, n) => Math.max(m, Number(n.id)), 0);
+    const target = this.txData ?? this.data;
+    const maxId = target.nodes.reduce((m, n) => Math.max(m, Number(n.id)), 0);
     const id = maxId + 1;
     const node: NodeRecord = { id, labels, properties };
-    this.data.nodes.push(node);
+    target.nodes.push(node);
     return node;
   }
 
   async findNode(labels: string[], properties: Record<string, unknown>): Promise<NodeRecord | null> {
-    for (const node of this.data.nodes) {
+    const src = this.txData ?? this.data;
+    for (const node of src.nodes) {
       if (labels.length && !labels.every(l => node.labels.includes(l))) {
         continue;
       }
@@ -65,12 +70,31 @@ export class JsonAdapter implements StorageAdapter {
 
   // Relationship APIs left unimplemented for this MVP
   async getRelationshipById(id: number | string): Promise<RelRecord | null> {
-    return this.data.relationships.find(r => r.id === id) || null;
+    const src = this.txData ?? this.data;
+    return src.relationships.find(r => r.id === id) || null;
   }
 
   async *scanRelationships(): AsyncIterable<RelRecord> {
-    for (const rel of this.data.relationships) {
+    const src = this.txData ?? this.data;
+    for (const rel of src.relationships) {
       yield rel;
     }
+  }
+
+  async beginTransaction(): Promise<TransactionCtx> {
+    if (this.txData) throw new Error('transaction already in progress');
+    this.txData = JSON.parse(JSON.stringify(this.data));
+    return {};
+  }
+
+  async commit(_: TransactionCtx): Promise<void> {
+    if (this.txData) {
+      this.data = this.txData;
+      this.txData = undefined;
+    }
+  }
+
+  async rollback(_: TransactionCtx): Promise<void> {
+    this.txData = undefined;
   }
 }
