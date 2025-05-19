@@ -459,3 +459,26 @@ runOnAdapters('RETURN multiple expressions with aliases', async engine => {
   for await (const row of engine.run(q)) out.push(`${row.title}-${row.year}`);
   assert.deepStrictEqual(out, ['The Matrix-1999', 'John Wick-2014']);
 });
+
+runOnAdapters('MATCH with parameter property', async engine => {
+  const q = 'MATCH (n:Person {name:$name}) RETURN n';
+  const out = [];
+  for await (const row of engine.run(q, { name: 'Alice' })) out.push(row.n);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Alice');
+});
+
+runOnAdapters('WHERE clause with parameter', async engine => {
+  const q = 'MATCH (m:Movie) WHERE m.released > $year RETURN m';
+  const out = [];
+  for await (const row of engine.run(q, { year: 2000 })) out.push(row.m);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.title, 'John Wick');
+});
+
+runOnAdapters('SET property using parameter', async engine => {
+  const q = 'MATCH (n:Person {name:"Bob"}) SET n.age = $age RETURN n';
+  let node;
+  for await (const row of engine.run(q, { age: 55 })) node = row.n;
+  assert.strictEqual(node.properties.age, 55);
+});
