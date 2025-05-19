@@ -14,6 +14,7 @@ export interface RelRecord {
 
 export interface NodeScanSpec {
   label?: string;
+  labels?: string[];
 }
 
 export interface TransactionCtx {

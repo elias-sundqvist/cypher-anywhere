@@ -7,20 +7,20 @@ test('parse MATCH (n) RETURN n', () => {
   const ast = parse('MATCH (n) RETURN n');
   assert.strictEqual(ast.type, 'MatchReturn');
   assert.strictEqual(ast.variable, 'n');
-  assert.strictEqual(ast.label, undefined);
+  assert.deepStrictEqual(ast.labels, []);
 });
 
 // Match with label
 test('parse MATCH (n:Person) RETURN n', () => {
   const ast = parse('MATCH (n:Person) RETURN n');
-  assert.strictEqual(ast.label, 'Person');
+  assert.deepStrictEqual(ast.labels, ['Person']);
 });
 
 // Create node
 test('parse CREATE (n:Person {name:"Alice"}) RETURN n', () => {
   const ast = parse('CREATE (n:Person {name:"Alice"}) RETURN n');
   assert.strictEqual(ast.type, 'Create');
-  assert.strictEqual(ast.label, 'Person');
+  assert.deepStrictEqual(ast.labels, ['Person']);
   assert.strictEqual(ast.properties.name, 'Alice');
 });
 

@@ -1,14 +1,14 @@
 export interface MatchReturnQuery {
   type: 'MatchReturn';
   variable: string;
-  label?: string;
+  labels?: string[];
   properties?: Record<string, unknown>;
 }
 
 export interface CreateQuery {
   type: 'Create';
   variable: string;
-  label?: string;
+  labels?: string[];
   properties?: Record<string, unknown>;
   returnVariable?: string;
 }
@@ -16,7 +16,7 @@ export interface CreateQuery {
 export interface MergeQuery {
   type: 'Merge';
   variable: string;
-  label?: string;
+  labels?: string[];
   properties?: Record<string, unknown>;
   returnVariable?: string;
 }
@@ -24,7 +24,7 @@ export interface MergeQuery {
 export interface MatchDeleteQuery {
   type: 'MatchDelete';
   variable: string;
-  label?: string;
+  labels?: string[];
   properties?: Record<string, unknown>;
   isRelationship?: boolean;
 }
@@ -32,7 +32,7 @@ export interface MatchDeleteQuery {
 export interface MatchSetQuery {
   type: 'MatchSet';
   variable: string;
-  label?: string;
+  labels?: string[];
   properties?: Record<string, unknown>;
   property: string;
   value: unknown;
@@ -46,11 +46,11 @@ export interface CreateRelQuery {
   relType: string;
   relProperties?: Record<string, unknown>;
   start: {
-    label?: string;
+    labels?: string[];
     properties?: Record<string, unknown>;
   };
   end: {
-    label?: string;
+    labels?: string[];
     properties?: Record<string, unknown>;
   };
   returnVariable?: string;
@@ -169,9 +169,12 @@ class Parser {
   private parseNodePattern() {
     this.consume('punct', '(');
     const variable = this.parseIdentifier();
-    let label: string | undefined;
+    const labels: string[] = [];
     if (this.optional('punct', ':')) {
-      label = this.parseIdentifier();
+      labels.push(this.parseIdentifier());
+      while (this.optional('punct', ':')) {
+        labels.push(this.parseIdentifier());
+      }
     }
     let properties: Record<string, unknown> | undefined;
     if (this.optional('punct', '{')) {
@@ -179,7 +182,7 @@ class Parser {
       this.consume('punct', '}');
     }
     this.consume('punct', ')');
-    return { variable, label, properties };
+    return { variable, labels, properties };
   }
 
   private parseMaybeNodePattern() {
@@ -188,9 +191,12 @@ class Parser {
     if (this.current()?.type === 'identifier') {
       variable = this.parseIdentifier();
     }
-    let label: string | undefined;
+    const labels: string[] = [];
     if (this.optional('punct', ':')) {
-      label = this.parseIdentifier();
+      labels.push(this.parseIdentifier());
+      while (this.optional('punct', ':')) {
+        labels.push(this.parseIdentifier());
+      }
     }
     let properties: Record<string, unknown> | undefined;
     if (this.optional('punct', '{')) {
@@ -198,7 +204,7 @@ class Parser {
       this.consume('punct', '}');
     }
     this.consume('punct', ')');
-    return { variable, label, properties };
+    return { variable, labels, properties };
   }
 
   private parseRelationshipPattern() {
@@ -267,7 +273,7 @@ class Parser {
 
   private parseMatch(): CypherAST {
     this.consume('keyword', 'MATCH');
-    let pattern: { variable: string; label?: string; properties?: Record<string, unknown>; isRel?: boolean };
+    let pattern: { variable: string; labels?: string[]; properties?: Record<string, unknown>; isRel?: boolean };
     const start = this.parseMaybeNodePattern();
     if (this.current()?.value === '-') {
       this.consume('punct', '-');
@@ -286,10 +292,10 @@ class Parser {
       this.consume('punct', '-');
       this.consume('punct', '>');
       this.parseMaybeNodePattern();
-      pattern = { variable: relVar, label: relType, properties: relProps, isRel: true };
+      pattern = { variable: relVar, labels: relType ? [relType] : undefined, properties: relProps, isRel: true };
     } else {
       if (!start.variable) throw new Error('Parse error: node variable required');
-      pattern = { variable: start.variable, label: start.label, properties: start.properties, isRel: false };
+      pattern = { variable: start.variable, labels: start.labels, properties: start.properties, isRel: false };
     }
     const next = this.current();
     if (!next || next.type !== 'keyword') throw new Error('Expected keyword');
@@ -297,13 +303,13 @@ class Parser {
       this.consume('keyword', 'RETURN');
       const ret = this.parseIdentifier();
       if (ret !== pattern.variable) throw new Error('Parse error: return variable mismatch');
-      return { type: 'MatchReturn', variable: pattern.variable, label: pattern.label, properties: pattern.properties };
+      return { type: 'MatchReturn', variable: pattern.variable, labels: pattern.labels, properties: pattern.properties };
     }
     if (next.value === 'DELETE') {
       this.consume('keyword', 'DELETE');
       const id = this.parseIdentifier();
       if (id !== pattern.variable) throw new Error('Parse error: delete variable mismatch');
-      return { type: 'MatchDelete', variable: pattern.variable, label: pattern.label, properties: pattern.properties, isRelationship: pattern.isRel };
+      return { type: 'MatchDelete', variable: pattern.variable, labels: pattern.labels, properties: pattern.properties, isRelationship: pattern.isRel };
     }
     if (next.value === 'SET') {
       this.consume('keyword', 'SET');
@@ -318,7 +324,7 @@ class Parser {
       return {
         type: 'MatchSet',
         variable: pattern.variable,
-        label: pattern.label,
+        labels: pattern.labels,
         properties: pattern.properties,
         property: prop,
         value,
@@ -354,8 +360,8 @@ class Parser {
         relVariable: relVar,
         relType,
         relProperties: relProps,
-        start: { label: start.label, properties: start.properties },
-        end: { label: end.label, properties: end.properties },
+        start: { labels: start.labels, properties: start.properties },
+        end: { labels: end.labels, properties: end.properties },
         returnVariable: ret,
       };
     }
@@ -363,7 +369,7 @@ class Parser {
     if (ret && ret !== start.variable) {
       throw new Error('Parse error: return variable mismatch');
     }
-    return { type: 'Create', variable: start.variable, label: start.label, properties: start.properties, returnVariable: ret };
+    return { type: 'Create', variable: start.variable, labels: start.labels, properties: start.properties, returnVariable: ret };
   }
 
   private parseMerge(): MergeQuery | MergeRelQuery {
@@ -402,7 +408,7 @@ class Parser {
     if (ret && ret !== start.variable) {
       throw new Error('Parse error: return variable mismatch');
     }
-    return { type: 'Merge', variable: start.variable, label: start.label, properties: start.properties, returnVariable: ret };
+    return { type: 'Merge', variable: start.variable, labels: start.labels, properties: start.properties, returnVariable: ret };
   }
 }
 
