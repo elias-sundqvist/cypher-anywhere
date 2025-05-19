@@ -45,6 +45,8 @@ A small demo is included under the `docs/` directory. After building the
 packages and the demo bundle you can open `docs/index.html` locally or via
 GitHub Pages to experiment with Cypher queries against an in-memory JSON
 graph.
+Updates to the `master` branch are automatically deployed to GitHub Pages by the
+`Deploy Demo` workflow.
 
 ```bash
 npm run build
