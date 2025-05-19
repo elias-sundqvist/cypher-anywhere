@@ -259,7 +259,10 @@ export class JsonAdapter implements StorageAdapter {
 
   async commit(_: TransactionCtx): Promise<void> {
     if (this.txData) {
-      this.data = this.txData;
+      // Preserve reference to the original dataset so external
+      // consumers (like the demo) continue to see updates.
+      this.data.nodes = this.txData.nodes;
+      this.data.relationships = this.txData.relationships;
       this.txData = undefined;
     }
   }
