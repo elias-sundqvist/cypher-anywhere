@@ -46,6 +46,7 @@ export type Expression =
   | { type: 'Literal'; value: string | number | boolean }
   | { type: 'Property'; variable: string; property: string }
   | { type: 'Variable'; name: string }
+  | { type: 'Parameter'; name: string }
   | { type: 'Add'; left: Expression; right: Expression }
   | { type: 'Nodes'; variable: string };
 
@@ -159,7 +160,7 @@ export type CypherAST =
   | UnwindQuery;
 
 interface Token {
-  type: 'keyword' | 'identifier' | 'number' | 'string' | 'punct';
+  type: 'keyword' | 'identifier' | 'number' | 'string' | 'punct' | 'parameter';
   value: string;
 }
 
@@ -195,6 +196,12 @@ function tokenize(input: string): Token[] {
     if (num) {
       tokens.push({ type: 'number', value: num[0] });
       i += num[0].length;
+      continue;
+    }
+    const param = /^\$[_A-Za-z][_A-Za-z0-9]*/.exec(rest);
+    if (param) {
+      tokens.push({ type: 'parameter', value: param[0].slice(1) });
+      i += param[0].length;
       continue;
     }
     const punct = /^[(){}:,\.\[\]=>+\-*<]/.exec(rest);
@@ -356,6 +363,10 @@ class Parser {
       this.consume('punct', ']');
       return arr;
     }
+    if (tok.type === 'parameter') {
+      this.pos++;
+      return { __param: tok.value };
+    }
     if (tok.type === 'identifier' && (tok.value === 'true' || tok.value === 'false')) {
       this.pos++;
       return tok.value === 'true';
@@ -383,6 +394,10 @@ class Parser {
     if (tok.type === 'number') {
       this.pos++;
       return { type: 'Literal', value: Number(tok.value) };
+    }
+    if (tok.type === 'parameter') {
+      this.pos++;
+      return { type: 'Parameter', name: tok.value };
     }
     if (tok.type === 'identifier') {
       if (tok.value === 'true' || tok.value === 'false') {

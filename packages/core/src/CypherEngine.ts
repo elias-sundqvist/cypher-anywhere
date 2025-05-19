@@ -19,7 +19,10 @@ export class CypherEngine {
     this.adapter = options.adapter;
   }
 
-  async *run(query: string): AsyncIterable<Record<string, unknown>> {
+  async *run(
+    query: string,
+    params: Record<string, any> = {}
+  ): AsyncIterable<Record<string, unknown>> {
     const statements = parseMany(query) as CypherAST[];
     const vars = new Map<string, any>();
     for (const ast of statements) {
@@ -38,7 +41,7 @@ export class CypherEngine {
       try {
         const logical = astToLogical(ast);
         const physical = logicalToPhysical(logical, this.adapter);
-        for await (const row of physical(vars)) {
+        for await (const row of physical(vars, params)) {
           yield row;
         }
         if (tx && this.adapter.commit) {
