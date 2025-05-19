@@ -29,13 +29,18 @@ export interface MatchDeleteQuery {
   isRelationship?: boolean;
 }
 
+export type Expression =
+  | { type: 'Literal'; value: string | number | boolean }
+  | { type: 'Property'; variable: string; property: string }
+  | { type: 'Add'; left: Expression; right: Expression };
+
 export interface MatchSetQuery {
   type: 'MatchSet';
   variable: string;
   labels?: string[];
   properties?: Record<string, unknown>;
   property: string;
-  value: unknown;
+  value: Expression;
   isRelationship?: boolean;
   returnVariable?: string;
 }
@@ -114,7 +119,7 @@ function tokenize(input: string): Token[] {
       i += num[0].length;
       continue;
     }
-    const punct = /^[(){}:,\.\[\]=>-]/.exec(rest);
+    const punct = /^[(){}:,\.\[\]=>+\-]/.exec(rest);
     if (punct) {
       tokens.push({ type: 'punct', value: punct[0] });
       i += punct[0].length;
@@ -237,7 +242,7 @@ class Parser {
       }
       const key = this.parseIdentifier();
       this.consume('punct', ':');
-      props[key] = this.parseValue();
+      props[key] = this.parseLiteralValue();
       first = false;
       if (this.current()?.value === '}') {
         break;
@@ -246,7 +251,7 @@ class Parser {
     return props;
   }
 
-  private parseValue(): unknown {
+  private parseLiteralValue(): unknown {
     const tok = this.current();
     if (!tok) throw new Error('Unexpected end of input');
     if (tok.type === 'string') {
@@ -260,6 +265,40 @@ class Parser {
     if (tok.type === 'identifier' && (tok.value === 'true' || tok.value === 'false')) {
       this.pos++;
       return tok.value === 'true';
+    }
+    throw new Error('Unexpected value');
+  }
+
+  private parseValue(): Expression {
+    let left = this.parseValueAtom();
+    while (this.current()?.value === '+') {
+      this.consume('punct', '+');
+      const right = this.parseValueAtom();
+      left = { type: 'Add', left, right };
+    }
+    return left;
+  }
+
+  private parseValueAtom(): Expression {
+    const tok = this.current();
+    if (!tok) throw new Error('Unexpected end of input');
+    if (tok.type === 'string') {
+      this.pos++;
+      return { type: 'Literal', value: tok.value.slice(1, -1) };
+    }
+    if (tok.type === 'number') {
+      this.pos++;
+      return { type: 'Literal', value: Number(tok.value) };
+    }
+    if (tok.type === 'identifier') {
+      if (tok.value === 'true' || tok.value === 'false') {
+        this.pos++;
+        return { type: 'Literal', value: tok.value === 'true' };
+      }
+      const variable = this.parseIdentifier();
+      this.consume('punct', '.');
+      const prop = this.parseIdentifier();
+      return { type: 'Property', variable, property: prop };
     }
     throw new Error('Unexpected value');
   }
