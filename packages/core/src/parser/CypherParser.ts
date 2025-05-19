@@ -55,11 +55,11 @@ export type Expression =
   | { type: 'Max'; expression: Expression }
   | { type: 'Avg'; expression: Expression };
 
-export interface WhereClause {
-  left: Expression;
-  operator: '=' | '>' | '>=';
-  right: Expression;
-}
+export type WhereClause =
+  | { type: 'Condition'; left: Expression; operator: '=' | '>' | '>='; right: Expression }
+  | { type: 'And'; left: WhereClause; right: WhereClause }
+  | { type: 'Or'; left: WhereClause; right: WhereClause }
+  | { type: 'Not'; clause: WhereClause };
 
 export interface MatchSetQuery {
   type: 'MatchSet';
@@ -179,7 +179,7 @@ function tokenize(input: string): Token[] {
       i += ws[0].length;
       continue;
     }
-    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH)\b/i.exec(rest);
+    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|AND|OR|NOT)\b/i.exec(rest);
     if (keyword) {
       tokens.push({ type: 'keyword', value: keyword[1].toUpperCase() });
       i += keyword[0].length;
@@ -497,6 +497,41 @@ class Parser {
     return { items, orderBy, skip, limit };
   }
 
+  private parseWhereClause(): WhereClause {
+    const parseNot = (): WhereClause => {
+      if (this.current()?.value === 'NOT') {
+        this.consume('keyword', 'NOT');
+        return { type: 'Not', clause: parseNot() };
+      }
+      const left = this.parseValue();
+      const opTok = this.consume('punct');
+      let op: '=' | '>' | '>=' = opTok.value as any;
+      if (opTok.value === '>' && this.optional('punct', '=')) {
+        op = '>=';
+      }
+      const right = this.parseValue();
+      return { type: 'Condition', left, operator: op, right };
+    };
+
+    const parseAnd = (): WhereClause => {
+      let left = parseNot();
+      while (this.current()?.value === 'AND') {
+        this.consume('keyword', 'AND');
+        const right = parseNot();
+        left = { type: 'And', left, right };
+      }
+      return left;
+    };
+
+    let left = parseAnd();
+    while (this.current()?.value === 'OR') {
+      this.consume('keyword', 'OR');
+      const right = parseAnd();
+      left = { type: 'Or', left, right };
+    }
+    return left;
+  }
+
   private parseMatchChain(start: {
     variable?: string;
     labels?: string[];
@@ -623,14 +658,7 @@ class Parser {
     let where: WhereClause | undefined;
     if (this.current()?.value === 'WHERE') {
       this.consume('keyword', 'WHERE');
-      const left = this.parseValue();
-      const opTok = this.consume('punct');
-      let op: '=' | '>' | '>=' = opTok.value as any;
-      if (opTok.value === '>' && this.optional('punct', '=')) {
-        op = '>=';
-      }
-      const right = this.parseValue();
-      where = { left, operator: op, right };
+      where = this.parseWhereClause();
     }
     const next = this.current();
     if (!next || next.type !== 'keyword') throw new Error('Expected keyword');
