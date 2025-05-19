@@ -17,21 +17,39 @@ test('JsonAdapter + CypherEngine returns all nodes for MATCH (n) RETURN n', asyn
   assert.ok(results[0].labels.includes('Person'));
 });
 
-test('CypherEngine filters nodes by label', async (t) => {
+// Query with label filter
+test('CypherEngine supports MATCH (n:Person) RETURN n', async () => {
   const adapter = new JsonAdapter({ datasetPath });
   const engine = new CypherEngine({ adapter });
-
-  const people = [];
-  for await (const row of engine.run('MATCH (p:Person) RETURN p')) {
-    people.push(row.p);
+  const results = [];
+  for await (const row of engine.run('MATCH (n:Person) RETURN n')) {
+    results.push(row.n);
   }
-  assert.strictEqual(people.length, 1);
-  assert.strictEqual(people[0].properties.name, 'Keanu Reeves');
+  assert.strictEqual(results.length, 1);
+  assert.deepStrictEqual(results[0].properties.name, 'Keanu Reeves');
+});
 
-  const movies = [];
-  for await (const row of engine.run('MATCH (m:Movie) RETURN m')) {
-    movies.push(row.m);
+// Create then match
+test('CypherEngine CREATE followed by MATCH finds new node', async () => {
+  const adapter = new JsonAdapter({ datasetPath });
+  const engine = new CypherEngine({ adapter });
+  for await (const _ of engine.run('CREATE (n:Person {name:"Alice"})')) {}
+  const results = [];
+  for await (const row of engine.run('MATCH (n:Person {name:"Alice"}) RETURN n')) {
+    results.push(row.n);
   }
-  assert.strictEqual(movies.length, 1);
-  assert.strictEqual(movies[0].properties.title, 'The Matrix');
+  assert.strictEqual(results.length, 1);
+  assert.strictEqual(results[0].properties.name, 'Alice');
+});
+
+// Merge existing
+test('CypherEngine MERGE finds existing node', async () => {
+  const adapter = new JsonAdapter({ datasetPath });
+  const engine = new CypherEngine({ adapter });
+  const out = [];
+  for await (const row of engine.run('MERGE (n:Person {name:"Keanu Reeves"}) RETURN n')) {
+    out.push(row.n);
+  }
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Keanu Reeves');
 });
