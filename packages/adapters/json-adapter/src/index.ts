@@ -6,10 +6,10 @@ import {
   TransactionCtx,
   IndexMetadata,
 } from '@cypher-anywhere/core';
-// Use a dynamic require to avoid bundling the "fs" module in browser builds
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-declare const require: any;
-let fs: typeof import('fs') | undefined;
+import type * as fsType from 'fs';
+
+// Declare Node's require for TypeScript without pulling in Node types
+declare var require: (module: string) => unknown;
 
 interface Dataset {
   nodes: NodeRecord[];
@@ -32,11 +32,9 @@ export class JsonAdapter implements StorageAdapter {
     if (options.dataset) {
       this.data = options.dataset;
     } else if (options.datasetPath) {
-      if (!fs) {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        fs = require('fs');
-      }
-      const text = fs!.readFileSync(options.datasetPath, 'utf8');
+      // Lazy load to avoid bundling Node's fs in the browser build
+      const fs = require('fs') as typeof fsType;
+      const text = fs.readFileSync(options.datasetPath, 'utf8');
       this.data = JSON.parse(text);
     } else {
       throw new Error('dataset or datasetPath must be provided');
