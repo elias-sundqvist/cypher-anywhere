@@ -38,6 +38,31 @@ export class JsonAdapter implements StorageAdapter {
     }
   }
 
+  async createNode(labels: string[], properties: Record<string, unknown>): Promise<NodeRecord> {
+    const maxId = this.data.nodes.reduce((m, n) => Math.max(m, Number(n.id)), 0);
+    const id = maxId + 1;
+    const node: NodeRecord = { id, labels, properties };
+    this.data.nodes.push(node);
+    return node;
+  }
+
+  async findNode(labels: string[], properties: Record<string, unknown>): Promise<NodeRecord | null> {
+    for (const node of this.data.nodes) {
+      if (labels.length && !labels.every(l => node.labels.includes(l))) {
+        continue;
+      }
+      let ok = true;
+      for (const [k, v] of Object.entries(properties)) {
+        if (node.properties[k] !== v) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) return node;
+    }
+    return null;
+  }
+
   // Relationship APIs left unimplemented for this MVP
   async getRelationshipById(id: number | string): Promise<RelRecord | null> {
     return this.data.relationships.find(r => r.id === id) || null;
