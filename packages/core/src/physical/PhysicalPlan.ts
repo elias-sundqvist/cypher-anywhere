@@ -6,7 +6,11 @@ import {
 } from '../storage/StorageAdapter';
 import { Expression, WhereClause } from '../parser/CypherParser';
 
-function evalExpr(expr: Expression, vars: Map<string, any>): any {
+function evalExpr(
+  expr: Expression,
+  vars: Map<string, any>,
+  params: Record<string, any>
+): any {
   switch (expr.type) {
     case 'Literal':
       return expr.value;
@@ -17,9 +21,11 @@ function evalExpr(expr: Expression, vars: Map<string, any>): any {
     }
     case 'Variable':
       return vars.get(expr.name);
+    case 'Parameter':
+      return params[expr.name];
     case 'Add':
-      const l = evalExpr(expr.left, vars);
-      const r = evalExpr(expr.right, vars);
+      const l = evalExpr(expr.left, vars, params);
+      const r = evalExpr(expr.right, vars, params);
       if (typeof l === 'number' && typeof r === 'number') {
         return l + r;
       }
@@ -65,9 +71,13 @@ async function findPath(
   return null;
 }
 
-function evalWhere(where: WhereClause, vars: Map<string, any>): boolean {
-  const l = evalExpr(where.left, vars);
-  const r = evalExpr(where.right, vars);
+function evalWhere(
+  where: WhereClause,
+  vars: Map<string, any>,
+  params: Record<string, any>
+): boolean {
+  const l = evalExpr(where.left, vars, params);
+  const r = evalExpr(where.right, vars, params);
   switch (where.operator) {
     case '=':
       return l === r;
@@ -80,24 +90,49 @@ function evalWhere(where: WhereClause, vars: Map<string, any>): boolean {
   }
 }
 
+function evalPropValue(
+  val: any,
+  vars: Map<string, any>,
+  params: Record<string, any>
+): any {
+  if (val && typeof val === 'object' && '__param' in val) {
+    return params[(val as any).__param];
+  }
+  return val;
+}
+
+function evalProps(
+  props: Record<string, unknown> | undefined,
+  vars: Map<string, any>,
+  params: Record<string, any>
+): Record<string, any> {
+  const out: Record<string, any> = {};
+  if (!props) return out;
+  for (const [k, v] of Object.entries(props)) {
+    out[k] = evalPropValue(v, vars, params);
+  }
+  return out;
+}
+
 export type PhysicalPlan = (
-  vars: Map<string, any>
+  vars: Map<string, any>,
+  params: Record<string, any>
 ) => AsyncIterable<Record<string, unknown>>;
 
 export function logicalToPhysical(
   plan: LogicalPlan,
   adapter: StorageAdapter
 ): PhysicalPlan {
-  return async function* (vars: Map<string, any>) {
+  return async function* (vars: Map<string, any>, params: Record<string, any>) {
     switch (plan.type) {
       case 'MatchReturn': {
         const rows: { row: Record<string, unknown>; order?: any; node: NodeRecord }[] = [];
         const collect = async (node: NodeRecord) => {
           vars.set(plan.variable, node);
-          if (plan.where && !evalWhere(plan.where, vars)) return;
+          if (plan.where && !evalWhere(plan.where, vars, params)) return;
           const row: Record<string, unknown> = {};
           plan.returnItems.forEach((item, idx) => {
-            const val = evalExpr(item.expression, vars);
+            const val = evalExpr(item.expression, vars, params);
             let key: string;
             if (item.alias) {
               key = item.alias;
@@ -110,7 +145,7 @@ export function logicalToPhysical(
             }
             row[key] = val;
           });
-          const order = plan.orderBy ? evalExpr(plan.orderBy, vars) : undefined;
+          const order = plan.orderBy ? evalExpr(plan.orderBy, vars, params) : undefined;
           rows.push({ row, order, node });
         };
 
@@ -123,7 +158,8 @@ export function logicalToPhysical(
           adapter.indexLookup &&
           adapter.listIndexes
         ) {
-          const [prop, value] = Object.entries(plan.properties)[0];
+          const [prop, valueExpr] = Object.entries(plan.properties)[0];
+          const value = evalPropValue(valueExpr, vars, params);
           const indexes = await adapter.listIndexes();
           const label = plan.labels[0];
           const found = indexes.find(
@@ -142,7 +178,7 @@ export function logicalToPhysical(
             if (plan.properties) {
               let ok = true;
               for (const [k, v] of Object.entries(plan.properties)) {
-                if (node.properties[k] !== v) {
+                if (node.properties[k] !== evalPropValue(v, vars, params)) {
                   ok = false;
                   break;
                 }
@@ -173,11 +209,14 @@ export function logicalToPhysical(
       }
       case 'Create': {
         if (!adapter.createNode) throw new Error('Adapter does not support CREATE');
-        const node = await adapter.createNode(plan.labels ?? [], plan.properties ?? {});
+        const node = await adapter.createNode(
+          plan.labels ?? [],
+          evalProps(plan.properties ?? {}, vars, params)
+        );
         vars.set(plan.variable, node);
         if (plan.setProperties && adapter.updateNodeProperties) {
           for (const [k, expr] of Object.entries(plan.setProperties)) {
-            const val = evalExpr(expr, vars);
+            const val = evalExpr(expr, vars, params);
             await adapter.updateNodeProperties(node.id, { [k]: val });
             node.properties[k] = val;
           }
@@ -190,16 +229,22 @@ export function logicalToPhysical(
       case 'Merge': {
         if (!adapter.findNode || !adapter.createNode)
           throw new Error('Adapter does not support MERGE');
-        let node = await adapter.findNode(plan.labels ?? [], plan.properties ?? {});
+        let node = await adapter.findNode(
+          plan.labels ?? [],
+          evalProps(plan.properties ?? {}, vars, params)
+        );
         let created = false;
         if (!node) {
-          node = await adapter.createNode(plan.labels ?? [], plan.properties ?? {});
+          node = await adapter.createNode(
+            plan.labels ?? [],
+            evalProps(plan.properties ?? {}, vars, params)
+          );
           created = true;
         }
         vars.set(plan.variable, node);
         if (created && plan.onCreateSet && adapter.updateNodeProperties) {
           for (const [k, expr] of Object.entries(plan.onCreateSet)) {
-            const val = evalExpr(expr, vars);
+            const val = evalExpr(expr, vars, params);
             await adapter.updateNodeProperties(node.id, { [k]: val });
             node.properties[k] = val;
           }
@@ -219,7 +264,7 @@ export function logicalToPhysical(
             if (plan.properties) {
               let ok = true;
               for (const [k, v] of Object.entries(plan.properties)) {
-                if (rel.properties[k] !== v) {
+                if (rel.properties[k] !== evalPropValue(v, vars, params)) {
                   ok = false;
                   break;
                 }
@@ -227,7 +272,7 @@ export function logicalToPhysical(
               if (!ok) continue;
             }
             vars.set(plan.variable, rel);
-            if (plan.where && !evalWhere(plan.where, vars)) continue;
+            if (plan.where && !evalWhere(plan.where, vars, params)) continue;
             await adapter.deleteRelationship(rel.id);
             break;
           }
@@ -238,7 +283,7 @@ export function logicalToPhysical(
             let ok = true;
             if (plan.properties) {
               for (const [k, v] of Object.entries(plan.properties)) {
-                if (node.properties[k] !== v) {
+                if (node.properties[k] !== evalPropValue(v, vars, params)) {
                   ok = false;
                   break;
                 }
@@ -246,7 +291,7 @@ export function logicalToPhysical(
             }
             if (!ok) continue;
             vars.set(plan.variable, node);
-            if (plan.where && !evalWhere(plan.where, vars)) continue;
+            if (plan.where && !evalWhere(plan.where, vars, params)) continue;
             await adapter.deleteNode(node.id);
             break;
           }
@@ -271,8 +316,8 @@ export function logicalToPhysical(
               if (!ok) continue;
             }
             vars.set(plan.variable, rel);
-            if (plan.where && !evalWhere(plan.where, vars)) continue;
-            const val = evalExpr(plan.value, vars);
+            if (plan.where && !evalWhere(plan.where, vars, params)) continue;
+            const val = evalExpr(plan.value, vars, params);
             await adapter.updateRelationshipProperties(rel.id, { [plan.property]: val });
             rel.properties[plan.property] = val;
             if (plan.returnVariable) {
@@ -285,8 +330,8 @@ export function logicalToPhysical(
           const bound = vars.get(plan.variable) as NodeRecord | undefined;
           if (bound && (!plan.labels || plan.labels.length === 0) && !plan.properties) {
             const node = bound;
-            if (!plan.where || evalWhere(plan.where, vars)) {
-              const val = evalExpr(plan.value, vars);
+            if (!plan.where || evalWhere(plan.where, vars, params)) {
+              const val = evalExpr(plan.value, vars, params);
               await adapter.updateNodeProperties(node.id, { [plan.property]: val });
               node.properties[plan.property] = val;
               if (plan.returnVariable) {
@@ -298,7 +343,7 @@ export function logicalToPhysical(
               let ok = true;
               if (plan.properties) {
                 for (const [k, v] of Object.entries(plan.properties)) {
-                  if (node.properties[k] !== v) {
+                  if (node.properties[k] !== evalPropValue(v, vars, params)) {
                     ok = false;
                     break;
                   }
@@ -306,8 +351,8 @@ export function logicalToPhysical(
               }
               if (!ok) continue;
               vars.set(plan.variable, node);
-              if (plan.where && !evalWhere(plan.where, vars)) continue;
-              const val = evalExpr(plan.value, vars);
+              if (plan.where && !evalWhere(plan.where, vars, params)) continue;
+              const val = evalExpr(plan.value, vars, params);
               await adapter.updateNodeProperties(node.id, { [plan.property]: val });
               node.properties[plan.property] = val;
               if (plan.returnVariable) {
@@ -321,9 +366,20 @@ export function logicalToPhysical(
       case 'CreateRel': {
         if (!adapter.createNode || !adapter.createRelationship)
           throw new Error('Adapter does not support CREATE');
-        const start = await adapter.createNode(plan.start.labels ?? [], plan.start.properties ?? {});
-        const end = await adapter.createNode(plan.end.labels ?? [], plan.end.properties ?? {});
-        const rel = await adapter.createRelationship(plan.relType, start.id, end.id, plan.relProperties ?? {});
+        const start = await adapter.createNode(
+          plan.start.labels ?? [],
+          evalProps(plan.start.properties ?? {}, vars, params)
+        );
+        const end = await adapter.createNode(
+          plan.end.labels ?? [],
+          evalProps(plan.end.properties ?? {}, vars, params)
+        );
+        const rel = await adapter.createRelationship(
+          plan.relType,
+          start.id,
+          end.id,
+          evalProps(plan.relProperties ?? {}, vars, params)
+        );
         if (plan.returnVariable) {
           vars.set(plan.relVariable, rel);
           yield { [plan.relVariable]: rel };
@@ -346,13 +402,18 @@ export function logicalToPhysical(
         }
         let created = false;
         if (!existing) {
-          existing = await adapter.createRelationship(plan.relType, startNode.id, endNode.id, plan.relProperties ?? {});
+          existing = await adapter.createRelationship(
+            plan.relType,
+            startNode.id,
+            endNode.id,
+            evalProps(plan.relProperties ?? {}, vars, params)
+          );
           created = true;
         }
         vars.set(plan.relVariable, existing);
         if (created && plan.onCreateSet && adapter.updateRelationshipProperties) {
           for (const [k, expr] of Object.entries(plan.onCreateSet)) {
-            const val = evalExpr(expr, vars);
+            const val = evalExpr(expr, vars, params);
             await adapter.updateRelationshipProperties(existing.id, { [k]: val });
             existing.properties[k] = val;
           }
@@ -370,7 +431,7 @@ export function logicalToPhysical(
           let ok = true;
           if (plan.start.properties) {
             for (const [k, v] of Object.entries(plan.start.properties)) {
-              if (node.properties[k] !== v) {
+              if (node.properties[k] !== evalPropValue(v, vars, params)) {
                 ok = false;
                 break;
               }
@@ -383,7 +444,7 @@ export function logicalToPhysical(
           let ok = true;
           if (plan.end.properties) {
             for (const [k, v] of Object.entries(plan.end.properties)) {
-              if (node.properties[k] !== v) {
+              if (node.properties[k] !== evalPropValue(v, vars, params)) {
                 ok = false;
                 break;
               }
@@ -446,7 +507,7 @@ export function logicalToPhysical(
             if (step.rel.properties) {
               let ok = true;
               for (const [k, v] of Object.entries(step.rel.properties)) {
-                if (rel.properties[k] !== v) {
+                if (rel.properties[k] !== evalPropValue(v, varsLocal, params)) {
                   ok = false;
                   break;
                 }
@@ -462,7 +523,7 @@ export function logicalToPhysical(
             if (step.node.properties) {
               let ok = true;
               for (const [k, v] of Object.entries(step.node.properties)) {
-                if (nextNode.properties[k] !== v) {
+                if (nextNode.properties[k] !== evalPropValue(v, varsLocal, params)) {
                   ok = false;
                   break;
                 }
@@ -492,12 +553,12 @@ export function logicalToPhysical(
         if (Array.isArray(plan.list)) {
           items = plan.list;
         } else {
-          const v = evalExpr(plan.list, vars);
+          const v = evalExpr(plan.list, vars, params);
           items = Array.isArray(v) ? v : [];
         }
         for (const item of items) {
           vars.set(plan.variable, item);
-          for await (const row of innerPlan(vars)) {
+          for await (const row of innerPlan(vars, params)) {
             yield row;
           }
         }
@@ -508,12 +569,12 @@ export function logicalToPhysical(
         if (Array.isArray(plan.list)) {
           items = plan.list;
         } else {
-          const v = evalExpr(plan.list, vars);
+          const v = evalExpr(plan.list, vars, params);
           items = Array.isArray(v) ? v : [];
         }
         for (const item of items) {
           vars.set(plan.variable, item);
-          const val = evalExpr(plan.returnExpression, vars);
+          const val = evalExpr(plan.returnExpression, vars, params);
           if (
             plan.returnExpression.type === 'Variable' &&
             plan.returnExpression.name === plan.variable
