@@ -326,3 +326,13 @@ runOnAdapters('FOREACH variable drives SET', async engine => {
   for await (const row of engine.run(script)) if (row.c) last = row.c;
   assert.strictEqual(last.properties.num, 3);
 });
+
+runOnAdapters('FOREACH over path nodes sets property', async engine => {
+  const script =
+    'MATCH p=(a:Person {name:"Alice"})-[*]->(g:Genre {name:"Action"}); ' +
+    'FOREACH n IN nodes(p) MATCH (n) SET n.marked = true; ' +
+    'MATCH (n) WHERE n.marked = true RETURN n';
+  const out = [];
+  for await (const row of engine.run(script)) if (row.n) out.push(row.n);
+  assert.strictEqual(out.length, 3);
+});
