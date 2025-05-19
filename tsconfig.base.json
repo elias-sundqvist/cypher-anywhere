@@ -5,6 +5,14 @@
     "declaration": true,
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "typeRoots": ["types"],
+    "paths": {
+      "@cypher-anywhere/core": ["packages/core/src"],
+      "@cypher-anywhere/core/*": ["packages/core/src/*"],
+      "@cypher-anywhere/json-adapter": ["packages/adapters/json-adapter/src"],
+      "@cypher-anywhere/json-adapter/*": ["packages/adapters/json-adapter/src/*"]
+    }
   }
 }
