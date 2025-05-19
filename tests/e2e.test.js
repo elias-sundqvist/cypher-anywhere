@@ -336,3 +336,54 @@ runOnAdapters('FOREACH over path nodes sets property', async engine => {
   for await (const row of engine.run(script)) if (row.n) out.push(row.n);
   assert.strictEqual(out.length, 3);
 });
+
+runOnAdapters('multi-hop ->()-> chain returns final node', async engine => {
+  const out = [];
+  const q =
+    'MATCH (p:Person {name:"Alice"})-[r1:ACTED_IN]->(m)-[r2:IN_GENRE]->(g) RETURN g';
+  for await (const row of engine.run(q)) out.push(row.g);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Action');
+});
+
+runOnAdapters('multi-hop ->()<- chain', async engine => {
+  const out = [];
+  const q =
+    'MATCH (a:Person {name:"Alice"})-[r1:ACTED_IN]->(m)<-[r2:ACTED_IN]-(b:Person {name:"Bob"}) RETURN b';
+  for await (const row of engine.run(q)) out.push(row.b);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Bob');
+});
+
+runOnAdapters('multi-hop <-()-> chain', async engine => {
+  const out = [];
+  const q =
+    'MATCH (m1:Movie {title:"The Matrix"})<-[r1:ACTED_IN]-(p:Person)-[r2:ACTED_IN]->(m2:Movie {title:"John Wick"}) RETURN m2';
+  for await (const row of engine.run(q)) out.push(row.m2);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.title, 'John Wick');
+});
+
+runOnAdapters('multi-hop <-()<-, creating extra rel', async engine => {
+  const setup =
+    'MATCH (b:Person {name:"Bob"}) RETURN b; MATCH (c:Person {name:"Carol"}) RETURN c; MERGE (c)-[k:KNOWS]->(b) RETURN k';
+  for await (const _ of engine.run(setup)) {}
+  const out = [];
+  const q =
+    'MATCH (m:Movie {title:"John Wick"})<-[a:ACTED_IN]-(b:Person)<-[k:KNOWS]-(c:Person {name:"Carol"}) RETURN c';
+  for await (const row of engine.run(q)) out.push(row.c);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Carol');
+});
+
+runOnAdapters('multi-hop chain length 3', async engine => {
+  const setup =
+    'MATCH (g:Genre {name:"Action"}) RETURN g; CREATE (s:SubGenre {name:"Thriller"}) RETURN s; MERGE (g)-[r:HAS_SUB]->(s) RETURN r';
+  for await (const _ of engine.run(setup)) {}
+  const out = [];
+  const q =
+    'MATCH (p:Person {name:"Alice"})-[r1:ACTED_IN]->(m)-[r2:IN_GENRE]->(g)-[r3:HAS_SUB]->(s) RETURN s';
+  for await (const row of engine.run(q)) out.push(row.s);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Thriller');
+});

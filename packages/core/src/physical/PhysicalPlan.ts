@@ -338,6 +338,87 @@ export function logicalToPhysical(
         }
         break;
       }
+      case 'MatchChain': {
+        if (!adapter.scanNodes || !adapter.scanRelationships || !adapter.getNodeById)
+          throw new Error('Adapter does not support MATCH');
+        const scanRels = adapter.scanRelationships!.bind(adapter);
+        const getNode = adapter.getNodeById!.bind(adapter);
+        const startNodes: NodeRecord[] = [];
+        for await (const node of adapter.scanNodes(
+          plan.start.labels ? { labels: plan.start.labels } : {}
+        )) {
+          let ok = true;
+          if (plan.start.properties) {
+            for (const [k, v] of Object.entries(plan.start.properties)) {
+              if (node.properties[k] !== v) {
+                ok = false;
+                break;
+              }
+            }
+          }
+          if (ok) startNodes.push(node);
+        }
+        const traverse = async function* (
+          node: NodeRecord,
+          hop: number,
+          varsLocal: Map<string, any>
+        ): AsyncIterable<Record<string, unknown>> {
+          if (hop >= plan.hops.length) {
+            const ret = varsLocal.get(plan.returnVariable);
+            if (ret) yield { [plan.returnVariable]: ret };
+            return;
+          }
+          const step = plan.hops[hop];
+          for await (const rel of scanRels()) {
+            if (step.rel.type && rel.type !== step.rel.type) continue;
+            if (step.rel.direction === 'out') {
+              if (rel.startNode !== node.id) continue;
+            } else {
+              if (rel.endNode !== node.id) continue;
+            }
+            if (step.rel.properties) {
+              let ok = true;
+              for (const [k, v] of Object.entries(step.rel.properties)) {
+                if (rel.properties[k] !== v) {
+                  ok = false;
+                  break;
+                }
+              }
+              if (!ok) continue;
+            }
+            const nextId =
+              step.rel.direction === 'out' ? rel.endNode : rel.startNode;
+            const nextNode = await getNode(nextId);
+            if (!nextNode) continue;
+            if (step.node.labels && !step.node.labels.every(l => nextNode.labels.includes(l)))
+              continue;
+            if (step.node.properties) {
+              let ok = true;
+              for (const [k, v] of Object.entries(step.node.properties)) {
+                if (nextNode.properties[k] !== v) {
+                  ok = false;
+                  break;
+                }
+              }
+              if (!ok) continue;
+            }
+            const varsNext = new Map(varsLocal);
+            varsNext.set(step.rel.variable, rel);
+            varsNext.set(step.node.variable, nextNode);
+            for await (const row of traverse(nextNode, hop + 1, varsNext)) {
+              yield row;
+            }
+          }
+        };
+        for (const s of startNodes) {
+          const varsStart = new Map(vars);
+          varsStart.set(plan.start.variable, s);
+          for await (const row of traverse(s, 0, varsStart)) {
+            yield row;
+          }
+        }
+        break;
+      }
       case 'Foreach': {
         const innerPlan = logicalToPhysical(plan.statement, adapter);
         let items: unknown[];

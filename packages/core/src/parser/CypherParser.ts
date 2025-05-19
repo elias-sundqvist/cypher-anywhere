@@ -103,6 +103,29 @@ export interface ForeachQuery {
   statement: CypherAST;
 }
 
+export interface MatchChainQuery {
+  type: 'MatchChain';
+  start: {
+    variable: string;
+    labels?: string[];
+    properties?: Record<string, unknown>;
+  };
+  hops: {
+    rel: {
+      variable: string;
+      type?: string;
+      properties?: Record<string, unknown>;
+      direction: 'out' | 'in';
+    };
+    node: {
+      variable: string;
+      labels?: string[];
+      properties?: Record<string, unknown>;
+    };
+  }[];
+  returnVariable: string;
+}
+
 export type CypherAST =
   | MatchReturnQuery
   | CreateQuery
@@ -112,6 +135,7 @@ export type CypherAST =
   | CreateRelQuery
   | MergeRelQuery
   | MatchPathQuery
+  | MatchChainQuery
   | ForeachQuery;
 
 interface Token {
@@ -153,7 +177,7 @@ function tokenize(input: string): Token[] {
       i += num[0].length;
       continue;
     }
-    const punct = /^[(){}:,\.\[\]=>+\-*]/.exec(rest);
+    const punct = /^[(){}:,\.\[\]=>+\-*<]/.exec(rest);
     if (punct) {
       tokens.push({ type: 'punct', value: punct[0] });
       i += punct[0].length;
@@ -354,6 +378,64 @@ class Parser {
     return undefined;
   }
 
+  private parseMatchChain(start: {
+    variable?: string;
+    labels?: string[];
+    properties?: Record<string, unknown>;
+  }): MatchChainQuery {
+    if (!start.variable) throw new Error('Parse error: node variable required');
+    const hops: MatchChainQuery['hops'] = [];
+    let current = start;
+    while (this.current()?.value === '-' || this.current()?.value === '<') {
+      let direction: 'out' | 'in' = 'out';
+      if (this.current()?.value === '<') {
+        this.consume('punct', '<');
+        this.consume('punct', '-');
+        direction = 'in';
+      } else {
+        this.consume('punct', '-');
+      }
+      this.consume('punct', '[');
+      const relVar = this.parseIdentifier();
+      let relType: string | undefined;
+      if (this.optional('punct', ':')) {
+        relType = this.parseIdentifier();
+      }
+      let relProps: Record<string, unknown> | undefined;
+      if (this.optional('punct', '{')) {
+        relProps = this.parseProperties();
+        this.consume('punct', '}');
+      }
+      this.consume('punct', ']');
+      this.consume('punct', '-');
+      if (direction === 'out') {
+        this.consume('punct', '>');
+      }
+      const next = this.parseNodePattern();
+      hops.push({
+        rel: { variable: relVar, type: relType, properties: relProps, direction },
+        node: {
+          variable: next.variable,
+          labels: next.labels,
+          properties: next.properties,
+        },
+      });
+      current = next;
+    }
+    const ret = this.parseReturnVariable();
+    if (!ret) throw new Error('Parse error: RETURN required');
+    return {
+      type: 'MatchChain',
+      start: {
+        variable: start.variable,
+        labels: start.labels,
+        properties: start.properties,
+      },
+      hops,
+      returnVariable: ret,
+    };
+  }
+
   private parseMatch(): CypherAST {
     this.consume('keyword', 'MATCH');
     if (
@@ -383,6 +465,18 @@ class Parser {
     }
     let pattern: { variable: string; labels?: string[]; properties?: Record<string, unknown>; isRel?: boolean };
     const start = this.parseMaybeNodePattern();
+    if (
+      start.variable &&
+      (this.current()?.value === '-' || this.current()?.value === '<')
+    ) {
+      const save = this.pos;
+      try {
+        const chain = this.parseMatchChain(start);
+        if (chain.hops.length > 1) return chain;
+      } catch {
+        this.pos = save;
+      }
+    }
     if (this.current()?.value === '-') {
       this.consume('punct', '-');
       this.consume('punct', '[');
