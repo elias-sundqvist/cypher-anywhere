@@ -153,8 +153,15 @@ export function logicalToPhysical(
       case 'Create': {
         if (!adapter.createNode) throw new Error('Adapter does not support CREATE');
         const node = await adapter.createNode(plan.labels ?? [], plan.properties ?? {});
+        vars.set(plan.variable, node);
+        if (plan.setProperties && adapter.updateNodeProperties) {
+          for (const [k, expr] of Object.entries(plan.setProperties)) {
+            const val = evalExpr(expr, vars);
+            await adapter.updateNodeProperties(node.id, { [k]: val });
+            node.properties[k] = val;
+          }
+        }
         if (plan.returnVariable) {
-          vars.set(plan.variable, node);
           yield { [plan.variable]: node };
         }
         break;
@@ -163,11 +170,20 @@ export function logicalToPhysical(
         if (!adapter.findNode || !adapter.createNode)
           throw new Error('Adapter does not support MERGE');
         let node = await adapter.findNode(plan.labels ?? [], plan.properties ?? {});
+        let created = false;
         if (!node) {
           node = await adapter.createNode(plan.labels ?? [], plan.properties ?? {});
+          created = true;
+        }
+        vars.set(plan.variable, node);
+        if (created && plan.onCreateSet && adapter.updateNodeProperties) {
+          for (const [k, expr] of Object.entries(plan.onCreateSet)) {
+            const val = evalExpr(expr, vars);
+            await adapter.updateNodeProperties(node.id, { [k]: val });
+            node.properties[k] = val;
+          }
         }
         if (plan.returnVariable) {
-          vars.set(plan.variable, node);
           yield { [plan.variable]: node };
         }
         break;
@@ -307,11 +323,20 @@ export function logicalToPhysical(
             break;
           }
         }
+        let created = false;
         if (!existing) {
           existing = await adapter.createRelationship(plan.relType, startNode.id, endNode.id, plan.relProperties ?? {});
+          created = true;
+        }
+        vars.set(plan.relVariable, existing);
+        if (created && plan.onCreateSet && adapter.updateRelationshipProperties) {
+          for (const [k, expr] of Object.entries(plan.onCreateSet)) {
+            const val = evalExpr(expr, vars);
+            await adapter.updateRelationshipProperties(existing.id, { [k]: val });
+            existing.properties[k] = val;
+          }
         }
         if (plan.returnVariable) {
-          vars.set(plan.relVariable, existing);
           yield { [plan.relVariable]: existing };
         }
         break;

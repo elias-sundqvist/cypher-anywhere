@@ -393,3 +393,28 @@ runOnAdapters('return numeric addition expression', async engine => {
   for await (const row of engine.run('MATCH (m:Movie) RETURN m.released+3')) out.push(row.value);
   assert.deepStrictEqual(out.sort(), [2002, 2017]);
 });
+
+runOnAdapters('create then set properties', async engine => {
+  let node;
+  for await (const row of engine.run("CREATE (p:Temp) SET p.name='Greg', p.age=32 RETURN p"))
+    node = row.p;
+  assert.strictEqual(node.properties.name, 'Greg');
+  assert.strictEqual(node.properties.age, 32);
+});
+
+runOnAdapters('merge with ON CREATE SET', async engine => {
+  let node;
+  for await (const row of engine.run("MERGE (p:TempMerge {id:1}) ON CREATE SET p.flag=true RETURN p"))
+    node = row.p;
+  assert.strictEqual(node.properties.flag, true);
+  for await (const row of engine.run("MERGE (p:TempMerge {id:1}) ON CREATE SET p.flag=false RETURN p"))
+    node = row.p;
+  assert.strictEqual(node.properties.flag, true);
+});
+
+runOnAdapters('create node with list property', async engine => {
+  let ev;
+  for await (const row of engine.run("CREATE (e:Event {tags:['neo4j','conf']}) RETURN e"))
+    ev = row.e;
+  assert.deepStrictEqual(ev.properties.tags, ['neo4j', 'conf']);
+});
