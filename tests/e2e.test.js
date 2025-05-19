@@ -387,3 +387,9 @@ runOnAdapters('multi-hop chain length 3', async engine => {
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Thriller');
 });
+
+runOnAdapters('return numeric addition expression', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (m:Movie) RETURN m.released+3')) out.push(row.value);
+  assert.deepStrictEqual(out.sort(), [2002, 2017]);
+});
