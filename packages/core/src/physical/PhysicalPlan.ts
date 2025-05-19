@@ -18,7 +18,12 @@ function evalExpr(expr: Expression, vars: Map<string, any>): any {
     case 'Variable':
       return vars.get(expr.name);
     case 'Add':
-      return String(evalExpr(expr.left, vars)) + String(evalExpr(expr.right, vars));
+      const l = evalExpr(expr.left, vars);
+      const r = evalExpr(expr.right, vars);
+      if (typeof l === 'number' && typeof r === 'number') {
+        return l + r;
+      }
+      return String(l) + String(r);
     case 'Nodes':
       return vars.get(expr.variable);
     default:
@@ -104,7 +109,15 @@ export function logicalToPhysical(
             for await (const node of adapter.indexLookup(label, prop, value)) {
               vars.set(plan.variable, node);
               if (plan.where && !evalWhere(plan.where, vars)) continue;
-              yield { [plan.variable]: node };
+              const val = evalExpr(plan.returnExpression, vars);
+              if (
+                plan.returnExpression.type === 'Variable' &&
+                plan.returnExpression.name === plan.variable
+              ) {
+                yield { [plan.variable]: val };
+              } else {
+                yield { value: val };
+              }
             }
             usedIndex = true;
           }
@@ -124,7 +137,15 @@ export function logicalToPhysical(
             }
             vars.set(plan.variable, node);
             if (plan.where && !evalWhere(plan.where, vars)) continue;
-            yield { [plan.variable]: node };
+            const val = evalExpr(plan.returnExpression, vars);
+            if (
+              plan.returnExpression.type === 'Variable' &&
+              plan.returnExpression.name === plan.variable
+            ) {
+              yield { [plan.variable]: val };
+            } else {
+              yield { value: val };
+            }
           }
         }
         break;
