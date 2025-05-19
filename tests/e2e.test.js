@@ -482,3 +482,23 @@ runOnAdapters('SET property using parameter', async engine => {
   for await (const row of engine.run(q, { age: 55 })) node = row.n;
   assert.strictEqual(node.properties.age, 55);
 });
+
+runOnAdapters('COUNT aggregation', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (m:Movie) RETURN COUNT(m)')) out.push(row.value);
+  assert.strictEqual(out[0], 2);
+});
+
+runOnAdapters('SUM aggregation', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (m:Movie) RETURN SUM(m.released)')) out.push(row.value);
+  assert.strictEqual(out[0], 1999 + 2014);
+});
+
+runOnAdapters('GROUP BY with COUNT', async engine => {
+  const q = 'MATCH (m:Movie) RETURN m.released AS year, COUNT(m) AS cnt';
+  const res = {};
+  for await (const row of engine.run(q)) res[row.year] = row.cnt;
+  assert.strictEqual(res[1999], 1);
+  assert.strictEqual(res[2014], 1);
+});
