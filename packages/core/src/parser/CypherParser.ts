@@ -48,7 +48,12 @@ export type Expression =
   | { type: 'Variable'; name: string }
   | { type: 'Parameter'; name: string }
   | { type: 'Add'; left: Expression; right: Expression }
-  | { type: 'Nodes'; variable: string };
+  | { type: 'Nodes'; variable: string }
+  | { type: 'Count'; expression: Expression | null }
+  | { type: 'Sum'; expression: Expression }
+  | { type: 'Min'; expression: Expression }
+  | { type: 'Max'; expression: Expression }
+  | { type: 'Avg'; expression: Expression };
 
 export interface WhereClause {
   left: Expression;
@@ -404,6 +409,25 @@ class Parser {
         this.pos++;
         return { type: 'Literal', value: tok.value === 'true' };
       }
+      const func = tok.value.toLowerCase();
+      if (['count', 'sum', 'min', 'max', 'avg'].includes(func)) {
+        this.pos++;
+        this.consume('punct', '(');
+        let expr: Expression | null = null;
+        if (this.current()?.value === '*') {
+          this.pos++;
+        } else {
+          expr = this.parseValue();
+        }
+        this.consume('punct', ')');
+        const type = func.charAt(0).toUpperCase() + func.slice(1) as
+          | 'Count'
+          | 'Sum'
+          | 'Min'
+          | 'Max'
+          | 'Avg';
+        return { type, expression: expr } as Expression;
+      }
       if (tok.value === 'nodes') {
         this.pos++;
         this.consume('punct', '(');
@@ -568,6 +592,8 @@ class Parser {
       try {
         const chain = this.parseMatchChain(start);
         if (chain.hops.length > 1) return chain;
+        // single-hop chains are treated as simple patterns
+        this.pos = save;
       } catch {
         this.pos = save;
       }
