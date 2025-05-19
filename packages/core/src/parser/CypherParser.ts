@@ -35,7 +35,8 @@ export type Expression =
   | { type: 'Literal'; value: string | number | boolean }
   | { type: 'Property'; variable: string; property: string }
   | { type: 'Variable'; name: string }
-  | { type: 'Add'; left: Expression; right: Expression };
+  | { type: 'Add'; left: Expression; right: Expression }
+  | { type: 'Nodes'; variable: string };
 
 export interface WhereClause {
   left: Expression;
@@ -81,10 +82,24 @@ export interface MergeRelQuery {
   returnVariable?: string;
 }
 
+export interface MatchPathQuery {
+  type: 'MatchPath';
+  pathVariable: string;
+  start: {
+    labels?: string[];
+    properties?: Record<string, unknown>;
+  };
+  end: {
+    labels?: string[];
+    properties?: Record<string, unknown>;
+  };
+  returnVariable?: string;
+}
+
 export interface ForeachQuery {
   type: 'Foreach';
   variable: string;
-  list: unknown[];
+  list: unknown[] | Expression;
   statement: CypherAST;
 }
 
@@ -96,6 +111,7 @@ export type CypherAST =
   | MatchSetQuery
   | CreateRelQuery
   | MergeRelQuery
+  | MatchPathQuery
   | ForeachQuery;
 
 interface Token {
@@ -137,7 +153,7 @@ function tokenize(input: string): Token[] {
       i += num[0].length;
       continue;
     }
-    const punct = /^[(){}:,\.\[\]=>+\-]/.exec(rest);
+    const punct = /^[(){}:,\.\[\]=>+\-*]/.exec(rest);
     if (punct) {
       tokens.push({ type: 'punct', value: punct[0] });
       i += punct[0].length;
@@ -314,6 +330,13 @@ class Parser {
         this.pos++;
         return { type: 'Literal', value: tok.value === 'true' };
       }
+      if (tok.value === 'nodes') {
+        this.pos++;
+        this.consume('punct', '(');
+        const inner = this.parseIdentifier();
+        this.consume('punct', ')');
+        return { type: 'Nodes', variable: inner };
+      }
       const variable = this.parseIdentifier();
       if (this.optional('punct', '.')) {
         const prop = this.parseIdentifier();
@@ -333,6 +356,31 @@ class Parser {
 
   private parseMatch(): CypherAST {
     this.consume('keyword', 'MATCH');
+    if (
+      this.current()?.type === 'identifier' &&
+      this.tokens[this.pos + 1]?.value === '='
+    ) {
+      const pathVariable = this.parseIdentifier();
+      this.consume('punct', '=');
+      const start = this.parseNodePattern();
+      this.consume('punct', '-');
+      this.consume('punct', '[');
+      this.consume('punct', '*');
+      this.consume('punct', ']');
+      this.consume('punct', '-');
+      this.consume('punct', '>');
+      const end = this.parseNodePattern();
+      const ret = this.parseReturnVariable();
+      if (ret && ret !== pathVariable)
+        throw new Error('Parse error: return variable mismatch');
+      return {
+        type: 'MatchPath',
+        pathVariable,
+        start: { labels: start.labels, properties: start.properties },
+        end: { labels: end.labels, properties: end.properties },
+        returnVariable: ret,
+      };
+    }
     let pattern: { variable: string; labels?: string[]; properties?: Record<string, unknown>; isRel?: boolean };
     const start = this.parseMaybeNodePattern();
     if (this.current()?.value === '-') {
@@ -488,15 +536,21 @@ class Parser {
     this.consume('keyword', 'FOREACH');
     const variable = this.parseIdentifier();
     this.consume('keyword', 'IN');
-    this.consume('punct', '[');
-    const list: unknown[] = [];
-    if (this.current()?.value !== ']') {
-      while (true) {
-        list.push(this.parseLiteralValue());
-        if (!this.optional('punct', ',')) break;
+    let list: unknown[] | Expression;
+    if (this.current()?.value === '[') {
+      this.consume('punct', '[');
+      const arr: unknown[] = [];
+      if (this.current()?.value !== ']') {
+        while (true) {
+          arr.push(this.parseLiteralValue());
+          if (!this.optional('punct', ',')) break;
+        }
       }
+      this.consume('punct', ']');
+      list = arr;
+    } else {
+      list = this.parseValue();
     }
-    this.consume('punct', ']');
     const statement = this.parse();
     return { type: 'Foreach', variable, list, statement };
   }

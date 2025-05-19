@@ -7,6 +7,7 @@ import {
   MatchSetQuery,
   CreateRelQuery,
   MergeRelQuery,
+  MatchPathQuery,
   ForeachQuery,
 } from '../parser/CypherParser';
 
@@ -20,6 +21,7 @@ export type LogicalPlan =
   | LogicalMatchSet
   | LogicalCreateRel
   | LogicalMergeRel
+  | LogicalMatchPath
   | LogicalForeach;
 
 export type LogicalMatchReturn = MatchReturnQuery;
@@ -29,6 +31,7 @@ export type LogicalMatchDelete = MatchDeleteQuery;
 export type LogicalMatchSet = MatchSetQuery;
 export type LogicalCreateRel = CreateRelQuery;
 export type LogicalMergeRel = MergeRelQuery;
+export type LogicalMatchPath = MatchPathQuery;
 export type LogicalForeach = ForeachQuery;
 
 export function astToLogical(ast: CypherAST): LogicalPlan {
