@@ -3,6 +3,7 @@ export interface MatchReturnQuery {
   variable: string;
   labels?: string[];
   properties?: Record<string, unknown>;
+  where?: WhereClause;
 }
 
 export interface CreateQuery {
@@ -27,12 +28,20 @@ export interface MatchDeleteQuery {
   labels?: string[];
   properties?: Record<string, unknown>;
   isRelationship?: boolean;
+  where?: WhereClause;
 }
 
 export type Expression =
   | { type: 'Literal'; value: string | number | boolean }
   | { type: 'Property'; variable: string; property: string }
+  | { type: 'Variable'; name: string }
   | { type: 'Add'; left: Expression; right: Expression };
+
+export interface WhereClause {
+  left: Expression;
+  operator: '=' | '>' | '>=';
+  right: Expression;
+}
 
 export interface MatchSetQuery {
   type: 'MatchSet';
@@ -43,6 +52,7 @@ export interface MatchSetQuery {
   value: Expression;
   isRelationship?: boolean;
   returnVariable?: string;
+  where?: WhereClause;
 }
 
 export interface CreateRelQuery {
@@ -71,6 +81,13 @@ export interface MergeRelQuery {
   returnVariable?: string;
 }
 
+export interface ForeachQuery {
+  type: 'Foreach';
+  variable: string;
+  list: unknown[];
+  statement: CypherAST;
+}
+
 export type CypherAST =
   | MatchReturnQuery
   | CreateQuery
@@ -78,7 +95,8 @@ export type CypherAST =
   | MatchDeleteQuery
   | MatchSetQuery
   | CreateRelQuery
-  | MergeRelQuery;
+  | MergeRelQuery
+  | ForeachQuery;
 
 interface Token {
   type: 'keyword' | 'identifier' | 'number' | 'string' | 'punct';
@@ -95,7 +113,7 @@ function tokenize(input: string): Token[] {
       i += ws[0].length;
       continue;
     }
-    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE)\b/i.exec(rest);
+    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN)\b/i.exec(rest);
     if (keyword) {
       tokens.push({ type: 'keyword', value: keyword[1].toUpperCase() });
       i += keyword[0].length;
@@ -164,6 +182,7 @@ class Parser {
     if (tok.value === 'MATCH') return this.parseMatch();
     if (tok.value === 'CREATE') return this.parseCreate();
     if (tok.value === 'MERGE') return this.parseMerge();
+    if (tok.value === 'FOREACH') return this.parseForeach();
     throw new Error('Parse error: unsupported query');
   }
 
@@ -296,9 +315,11 @@ class Parser {
         return { type: 'Literal', value: tok.value === 'true' };
       }
       const variable = this.parseIdentifier();
-      this.consume('punct', '.');
-      const prop = this.parseIdentifier();
-      return { type: 'Property', variable, property: prop };
+      if (this.optional('punct', '.')) {
+        const prop = this.parseIdentifier();
+        return { type: 'Property', variable, property: prop };
+      }
+      return { type: 'Variable', name: variable };
     }
     throw new Error('Unexpected value');
   }
@@ -336,19 +357,31 @@ class Parser {
       if (!start.variable) throw new Error('Parse error: node variable required');
       pattern = { variable: start.variable, labels: start.labels, properties: start.properties, isRel: false };
     }
+    let where: WhereClause | undefined;
+    if (this.current()?.value === 'WHERE') {
+      this.consume('keyword', 'WHERE');
+      const left = this.parseValue();
+      const opTok = this.consume('punct');
+      let op: '=' | '>' | '>=' = opTok.value as any;
+      if (opTok.value === '>' && this.optional('punct', '=')) {
+        op = '>=';
+      }
+      const right = this.parseValue();
+      where = { left, operator: op, right };
+    }
     const next = this.current();
     if (!next || next.type !== 'keyword') throw new Error('Expected keyword');
     if (next.value === 'RETURN') {
       this.consume('keyword', 'RETURN');
       const ret = this.parseIdentifier();
       if (ret !== pattern.variable) throw new Error('Parse error: return variable mismatch');
-      return { type: 'MatchReturn', variable: pattern.variable, labels: pattern.labels, properties: pattern.properties };
+      return { type: 'MatchReturn', variable: pattern.variable, labels: pattern.labels, properties: pattern.properties, where };
     }
     if (next.value === 'DELETE') {
       this.consume('keyword', 'DELETE');
       const id = this.parseIdentifier();
       if (id !== pattern.variable) throw new Error('Parse error: delete variable mismatch');
-      return { type: 'MatchDelete', variable: pattern.variable, labels: pattern.labels, properties: pattern.properties, isRelationship: pattern.isRel };
+      return { type: 'MatchDelete', variable: pattern.variable, labels: pattern.labels, properties: pattern.properties, isRelationship: pattern.isRel, where };
     }
     if (next.value === 'SET') {
       this.consume('keyword', 'SET');
@@ -369,6 +402,7 @@ class Parser {
         value,
         isRelationship: pattern.isRel,
         returnVariable: ret,
+        where,
       };
     }
     throw new Error('Parse error: unsupported MATCH clause');
@@ -448,6 +482,23 @@ class Parser {
       throw new Error('Parse error: return variable mismatch');
     }
     return { type: 'Merge', variable: start.variable, labels: start.labels, properties: start.properties, returnVariable: ret };
+  }
+
+  private parseForeach(): ForeachQuery {
+    this.consume('keyword', 'FOREACH');
+    const variable = this.parseIdentifier();
+    this.consume('keyword', 'IN');
+    this.consume('punct', '[');
+    const list: unknown[] = [];
+    if (this.current()?.value !== ']') {
+      while (true) {
+        list.push(this.parseLiteralValue());
+        if (!this.optional('punct', ',')) break;
+      }
+    }
+    this.consume('punct', ']');
+    const statement = this.parse();
+    return { type: 'Foreach', variable, list, statement };
   }
 }
 

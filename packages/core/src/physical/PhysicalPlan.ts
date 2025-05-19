@@ -4,9 +4,9 @@ import {
   NodeRecord,
   RelRecord,
 } from '../storage/StorageAdapter';
-import { Expression } from '../parser/CypherParser';
+import { Expression, WhereClause } from '../parser/CypherParser';
 
-function evalExpr(expr: Expression, vars: Map<string, NodeRecord | RelRecord>): any {
+function evalExpr(expr: Expression, vars: Map<string, any>): any {
   switch (expr.type) {
     case 'Literal':
       return expr.value;
@@ -15,6 +15,8 @@ function evalExpr(expr: Expression, vars: Map<string, NodeRecord | RelRecord>): 
       if (!rec) throw new Error(`Unbound variable ${expr.variable}`);
       return rec.properties[expr.property];
     }
+    case 'Variable':
+      return vars.get(expr.name);
     case 'Add':
       return String(evalExpr(expr.left, vars)) + String(evalExpr(expr.right, vars));
     default:
@@ -22,15 +24,30 @@ function evalExpr(expr: Expression, vars: Map<string, NodeRecord | RelRecord>): 
   }
 }
 
+function evalWhere(where: WhereClause, vars: Map<string, any>): boolean {
+  const l = evalExpr(where.left, vars);
+  const r = evalExpr(where.right, vars);
+  switch (where.operator) {
+    case '=':
+      return l === r;
+    case '>':
+      return (l as any) > (r as any);
+    case '>=':
+      return (l as any) >= (r as any);
+    default:
+      throw new Error('Unknown operator');
+  }
+}
+
 export type PhysicalPlan = (
-  vars: Map<string, NodeRecord | RelRecord>
+  vars: Map<string, any>
 ) => AsyncIterable<Record<string, unknown>>;
 
 export function logicalToPhysical(
   plan: LogicalPlan,
   adapter: StorageAdapter
 ): PhysicalPlan {
-  return async function* (vars: Map<string, NodeRecord | RelRecord>) {
+  return async function* (vars: Map<string, any>) {
     switch (plan.type) {
       case 'MatchReturn': {
         let usedIndex = false;
@@ -50,6 +67,7 @@ export function logicalToPhysical(
           if (found) {
             for await (const node of adapter.indexLookup(label, prop, value)) {
               vars.set(plan.variable, node);
+              if (plan.where && !evalWhere(plan.where, vars)) continue;
               yield { [plan.variable]: node };
             }
             usedIndex = true;
@@ -69,6 +87,7 @@ export function logicalToPhysical(
               if (!ok) continue;
             }
             vars.set(plan.variable, node);
+            if (plan.where && !evalWhere(plan.where, vars)) continue;
             yield { [plan.variable]: node };
           }
         }
@@ -113,6 +132,8 @@ export function logicalToPhysical(
               }
               if (!ok) continue;
             }
+            vars.set(plan.variable, rel);
+            if (plan.where && !evalWhere(plan.where, vars)) continue;
             await adapter.deleteRelationship(rel.id);
             break;
           }
@@ -130,6 +151,8 @@ export function logicalToPhysical(
               }
             }
             if (!ok) continue;
+            vars.set(plan.variable, node);
+            if (plan.where && !evalWhere(plan.where, vars)) continue;
             await adapter.deleteNode(node.id);
             break;
           }
@@ -154,6 +177,7 @@ export function logicalToPhysical(
               if (!ok) continue;
             }
             vars.set(plan.variable, rel);
+            if (plan.where && !evalWhere(plan.where, vars)) continue;
             const val = evalExpr(plan.value, vars);
             await adapter.updateRelationshipProperties(rel.id, { [plan.property]: val });
             rel.properties[plan.property] = val;
@@ -176,6 +200,7 @@ export function logicalToPhysical(
             }
             if (!ok) continue;
             vars.set(plan.variable, node);
+            if (plan.where && !evalWhere(plan.where, vars)) continue;
             const val = evalExpr(plan.value, vars);
             await adapter.updateNodeProperties(node.id, { [plan.property]: val });
             node.properties[plan.property] = val;
@@ -218,6 +243,16 @@ export function logicalToPhysical(
         if (plan.returnVariable) {
           vars.set(plan.relVariable, existing);
           yield { [plan.relVariable]: existing };
+        }
+        break;
+      }
+      case 'Foreach': {
+        const innerPlan = logicalToPhysical(plan.statement, adapter);
+        for (const item of plan.list) {
+          vars.set(plan.variable, item);
+          for await (const row of innerPlan(vars)) {
+            yield row;
+          }
         }
         break;
       }
