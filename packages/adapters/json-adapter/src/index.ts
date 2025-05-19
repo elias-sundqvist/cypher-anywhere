@@ -68,10 +68,12 @@ export class JsonAdapter implements StorageAdapter {
   }
 
   async *scanNodes(spec: NodeScanSpec = {}): AsyncIterable<NodeRecord> {
-    const { label } = spec;
+    const { label, labels } = spec;
     const src = this.txData ?? this.data;
     for (const node of src.nodes) {
-      if (!label || node.labels.includes(label)) {
+      const labelMatch = label ? node.labels.includes(label) : true;
+      const labelsMatch = labels ? labels.every(l => node.labels.includes(l)) : true;
+      if (labelMatch && labelsMatch) {
         yield node;
       }
     }

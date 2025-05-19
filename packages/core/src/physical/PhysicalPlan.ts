@@ -18,7 +18,7 @@ export function logicalToPhysical(
       case 'MatchReturn': {
         let usedIndex = false;
         if (
-          plan.label &&
+          plan.labels && plan.labels.length > 0 &&
           plan.properties &&
           Object.keys(plan.properties).length === 1 &&
           adapter.indexLookup &&
@@ -26,14 +26,12 @@ export function logicalToPhysical(
         ) {
           const [prop, value] = Object.entries(plan.properties)[0];
           const indexes = await adapter.listIndexes();
+          const label = plan.labels[0];
           const found = indexes.find(
-            i =>
-              i.label === plan.label &&
-              i.properties.length === 1 &&
-              i.properties[0] === prop
+            i => i.label === label && i.properties.length === 1 && i.properties[0] === prop
           );
           if (found) {
-            for await (const node of adapter.indexLookup(plan.label, prop, value)) {
+            for await (const node of adapter.indexLookup(label, prop, value)) {
               vars.set(plan.variable, node);
               yield { [plan.variable]: node };
             }
@@ -41,7 +39,7 @@ export function logicalToPhysical(
           }
         }
         if (!usedIndex) {
-          const scan = adapter.scanNodes(plan.label ? { label: plan.label } : {});
+          const scan = adapter.scanNodes(plan.labels ? { labels: plan.labels } : {});
           for await (const node of scan) {
             if (plan.properties) {
               let ok = true;
@@ -61,7 +59,7 @@ export function logicalToPhysical(
       }
       case 'Create': {
         if (!adapter.createNode) throw new Error('Adapter does not support CREATE');
-        const node = await adapter.createNode(plan.label ? [plan.label] : [], plan.properties ?? {});
+        const node = await adapter.createNode(plan.labels ?? [], plan.properties ?? {});
         if (plan.returnVariable) {
           vars.set(plan.variable, node);
           yield { [plan.variable]: node };
@@ -71,9 +69,9 @@ export function logicalToPhysical(
       case 'Merge': {
         if (!adapter.findNode || !adapter.createNode)
           throw new Error('Adapter does not support MERGE');
-        let node = await adapter.findNode(plan.label ? [plan.label] : [], plan.properties ?? {});
+        let node = await adapter.findNode(plan.labels ?? [], plan.properties ?? {});
         if (!node) {
-          node = await adapter.createNode(plan.label ? [plan.label] : [], plan.properties ?? {});
+          node = await adapter.createNode(plan.labels ?? [], plan.properties ?? {});
         }
         if (plan.returnVariable) {
           vars.set(plan.variable, node);
@@ -86,7 +84,8 @@ export function logicalToPhysical(
           if (!adapter.scanRelationships || !adapter.deleteRelationship)
             throw new Error('Adapter does not support relationship delete');
           for await (const rel of adapter.scanRelationships()) {
-            if (plan.label && rel.type !== plan.label) continue;
+            const label = plan.labels && plan.labels.length > 0 ? plan.labels[0] : undefined;
+            if (label && rel.type !== label) continue;
             if (plan.properties) {
               let ok = true;
               for (const [k, v] of Object.entries(plan.properties)) {
@@ -103,7 +102,7 @@ export function logicalToPhysical(
         } else {
           if (!adapter.scanNodes || !adapter.deleteNode)
             throw new Error('Adapter does not support node delete');
-          for await (const node of adapter.scanNodes(plan.label ? { label: plan.label } : {})) {
+          for await (const node of adapter.scanNodes(plan.labels ? { labels: plan.labels } : {})) {
             let ok = true;
             if (plan.properties) {
               for (const [k, v] of Object.entries(plan.properties)) {
@@ -125,7 +124,8 @@ export function logicalToPhysical(
           if (!adapter.scanRelationships || !adapter.updateRelationshipProperties)
             throw new Error('Adapter does not support relationship update');
           for await (const rel of adapter.scanRelationships()) {
-            if (plan.label && rel.type !== plan.label) continue;
+            const label = plan.labels && plan.labels.length > 0 ? plan.labels[0] : undefined;
+            if (label && rel.type !== label) continue;
             if (plan.properties) {
               let ok = true;
               for (const [k, v] of Object.entries(plan.properties)) {
@@ -147,7 +147,7 @@ export function logicalToPhysical(
         } else {
           if (!adapter.scanNodes || !adapter.updateNodeProperties)
             throw new Error('Adapter does not support node update');
-          for await (const node of adapter.scanNodes(plan.label ? { label: plan.label } : {})) {
+          for await (const node of adapter.scanNodes(plan.labels ? { labels: plan.labels } : {})) {
             let ok = true;
             if (plan.properties) {
               for (const [k, v] of Object.entries(plan.properties)) {
@@ -172,8 +172,8 @@ export function logicalToPhysical(
       case 'CreateRel': {
         if (!adapter.createNode || !adapter.createRelationship)
           throw new Error('Adapter does not support CREATE');
-        const start = await adapter.createNode(plan.start.label ? [plan.start.label] : [], plan.start.properties ?? {});
-        const end = await adapter.createNode(plan.end.label ? [plan.end.label] : [], plan.end.properties ?? {});
+        const start = await adapter.createNode(plan.start.labels ?? [], plan.start.properties ?? {});
+        const end = await adapter.createNode(plan.end.labels ?? [], plan.end.properties ?? {});
         const rel = await adapter.createRelationship(plan.relType, start.id, end.id, plan.relProperties ?? {});
         if (plan.returnVariable) {
           vars.set(plan.relVariable, rel);
