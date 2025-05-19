@@ -12,6 +12,7 @@ export interface CreateQuery {
   variable: string;
   labels?: string[];
   properties?: Record<string, unknown>;
+  setProperties?: Record<string, Expression>;
   returnVariable?: string;
 }
 
@@ -20,6 +21,7 @@ export interface MergeQuery {
   variable: string;
   labels?: string[];
   properties?: Record<string, unknown>;
+  onCreateSet?: Record<string, Expression>;
   returnVariable?: string;
 }
 
@@ -80,6 +82,7 @@ export interface MergeRelQuery {
   relProperties?: Record<string, unknown>;
   startVariable: string;
   endVariable: string;
+  onCreateSet?: Record<string, Expression>;
   returnVariable?: string;
 }
 
@@ -154,7 +157,7 @@ function tokenize(input: string): Token[] {
       i += ws[0].length;
       continue;
     }
-    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN)\b/i.exec(rest);
+    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON)\b/i.exec(rest);
     if (keyword) {
       tokens.push({ type: 'keyword', value: keyword[1].toUpperCase() });
       i += keyword[0].length;
@@ -321,6 +324,16 @@ class Parser {
     if (tok.type === 'number') {
       this.pos++;
       return Number(tok.value);
+    }
+    if (tok.type === 'punct' && tok.value === '[') {
+      this.pos++;
+      const arr: unknown[] = [];
+      while (this.current() && this.current()!.value !== ']') {
+        arr.push(this.parseLiteralValue());
+        if (!this.optional('punct', ',')) break;
+      }
+      this.consume('punct', ']');
+      return arr;
     }
     if (tok.type === 'identifier' && (tok.value === 'true' || tok.value === 'false')) {
       this.pos++;
@@ -594,11 +607,34 @@ class Parser {
         returnVariable: ret,
       };
     }
+    let setProps: Record<string, Expression> | undefined;
+    if (this.current()?.value === 'SET') {
+      this.consume('keyword', 'SET');
+      setProps = {};
+      while (true) {
+        const varName = this.parseIdentifier();
+        if (varName !== start.variable)
+          throw new Error('Parse error: set variable mismatch');
+        this.consume('punct', '.');
+        const prop = this.parseIdentifier();
+        this.consume('punct', '=');
+        const val = this.parseValue();
+        setProps[prop] = val;
+        if (!this.optional('punct', ',')) break;
+      }
+    }
     const ret = this.parseReturnVariable();
     if (ret && ret !== start.variable) {
       throw new Error('Parse error: return variable mismatch');
     }
-    return { type: 'Create', variable: start.variable, labels: start.labels, properties: start.properties, returnVariable: ret };
+    return {
+      type: 'Create',
+      variable: start.variable,
+      labels: start.labels,
+      properties: start.properties,
+      setProperties: setProps,
+      returnVariable: ret,
+    };
   }
 
   private parseMerge(): MergeQuery | MergeRelQuery {
@@ -619,6 +655,24 @@ class Parser {
       this.consume('punct', '-');
       this.consume('punct', '>');
       const end = this.parseMaybeNodePattern();
+      let onCreate: Record<string, Expression> | undefined;
+      if (this.current()?.value === 'ON') {
+        this.consume('keyword', 'ON');
+        this.consume('keyword', 'CREATE');
+        this.consume('keyword', 'SET');
+        onCreate = {};
+        while (true) {
+          const varName = this.parseIdentifier();
+          if (varName !== relVar)
+            throw new Error('Parse error: set variable mismatch');
+          this.consume('punct', '.');
+          const prop = this.parseIdentifier();
+          this.consume('punct', '=');
+          const val = this.parseValue();
+          onCreate[prop] = val;
+          if (!this.optional('punct', ',')) break;
+        }
+      }
       const ret = this.parseReturnVariable();
       if (ret && ret !== relVar) throw new Error('Parse error: return variable mismatch');
       if (!start.variable || !end.variable) throw new Error('Parse error: node variables required');
@@ -630,14 +684,40 @@ class Parser {
         startVariable: start.variable,
         endVariable: end.variable,
         returnVariable: ret,
+        onCreateSet: onCreate,
       };
     }
     if (!start.variable) throw new Error('Parse error: node variable required');
+    let onCreate: Record<string, Expression> | undefined;
+    if (this.current()?.value === 'ON') {
+      this.consume('keyword', 'ON');
+      this.consume('keyword', 'CREATE');
+      this.consume('keyword', 'SET');
+      onCreate = {};
+      while (true) {
+        const varName = this.parseIdentifier();
+        if (varName !== start.variable)
+          throw new Error('Parse error: set variable mismatch');
+        this.consume('punct', '.');
+        const prop = this.parseIdentifier();
+        this.consume('punct', '=');
+        const val = this.parseValue();
+        onCreate[prop] = val;
+        if (!this.optional('punct', ',')) break;
+      }
+    }
     const ret = this.parseReturnVariable();
     if (ret && ret !== start.variable) {
       throw new Error('Parse error: return variable mismatch');
     }
-    return { type: 'Merge', variable: start.variable, labels: start.labels, properties: start.properties, returnVariable: ret };
+    return {
+      type: 'Merge',
+      variable: start.variable,
+      labels: start.labels,
+      properties: start.properties,
+      onCreateSet: onCreate,
+      returnVariable: ret,
+    };
   }
 
   private parseForeach(): ForeachQuery {
