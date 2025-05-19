@@ -39,6 +39,20 @@ for await (const row of engine.run('MATCH (n) RETURN n')) {
 }
 ```
 
+## GitHub Pages Demo
+
+A small demo is included under the `docs/` directory. After building the
+packages and the demo bundle you can open `docs/index.html` locally or via
+GitHub Pages to experiment with Cypher queries against an in-memory JSON
+graph.
+
+```bash
+npm run build
+npm run build:demo
+```
+
+The page shows the current graph data and lets you run queries that modify it.
+
 To run the example:
 
 ```bash
