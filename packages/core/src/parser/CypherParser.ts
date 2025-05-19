@@ -107,6 +107,13 @@ export interface ForeachQuery {
   statement: CypherAST;
 }
 
+export interface UnwindQuery {
+  type: 'Unwind';
+  list: unknown[] | Expression;
+  variable: string;
+  returnExpression: Expression;
+}
+
 export interface MatchChainQuery {
   type: 'MatchChain';
   start: {
@@ -140,7 +147,8 @@ export type CypherAST =
   | MergeRelQuery
   | MatchPathQuery
   | MatchChainQuery
-  | ForeachQuery;
+  | ForeachQuery
+  | UnwindQuery;
 
 interface Token {
   type: 'keyword' | 'identifier' | 'number' | 'string' | 'punct';
@@ -157,7 +165,7 @@ function tokenize(input: string): Token[] {
       i += ws[0].length;
       continue;
     }
-    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON)\b/i.exec(rest);
+    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS)\b/i.exec(rest);
     if (keyword) {
       tokens.push({ type: 'keyword', value: keyword[1].toUpperCase() });
       i += keyword[0].length;
@@ -227,6 +235,7 @@ class Parser {
     if (tok.value === 'CREATE') return this.parseCreate();
     if (tok.value === 'MERGE') return this.parseMerge();
     if (tok.value === 'FOREACH') return this.parseForeach();
+    if (tok.value === 'UNWIND') return this.parseUnwind();
     throw new Error('Parse error: unsupported query');
   }
 
@@ -741,6 +750,30 @@ class Parser {
     }
     const statement = this.parse();
     return { type: 'Foreach', variable, list, statement };
+  }
+
+  private parseUnwind(): UnwindQuery {
+    this.consume('keyword', 'UNWIND');
+    let list: unknown[] | Expression;
+    if (this.current()?.value === '[') {
+      this.consume('punct', '[');
+      const arr: unknown[] = [];
+      if (this.current()?.value !== ']') {
+        while (true) {
+          arr.push(this.parseLiteralValue());
+          if (!this.optional('punct', ',')) break;
+        }
+      }
+      this.consume('punct', ']');
+      list = arr;
+    } else {
+      list = this.parseValue();
+    }
+    this.consume('keyword', 'AS');
+    const variable = this.parseIdentifier();
+    this.consume('keyword', 'RETURN');
+    const returnExpression = this.parseValue();
+    return { type: 'Unwind', list, variable, returnExpression };
   }
 }
 

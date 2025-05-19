@@ -482,6 +482,28 @@ export function logicalToPhysical(
         }
         break;
       }
+      case 'Unwind': {
+        let items: unknown[];
+        if (Array.isArray(plan.list)) {
+          items = plan.list;
+        } else {
+          const v = evalExpr(plan.list, vars);
+          items = Array.isArray(v) ? v : [];
+        }
+        for (const item of items) {
+          vars.set(plan.variable, item);
+          const val = evalExpr(plan.returnExpression, vars);
+          if (
+            plan.returnExpression.type === 'Variable' &&
+            plan.returnExpression.name === plan.variable
+          ) {
+            yield { [plan.variable]: val };
+          } else {
+            yield { value: val };
+          }
+        }
+        break;
+      }
       default:
         throw new Error('Query not supported in this MVP');
     }

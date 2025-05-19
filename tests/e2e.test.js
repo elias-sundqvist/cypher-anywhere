@@ -418,3 +418,24 @@ runOnAdapters('create node with list property', async engine => {
     ev = row.e;
   assert.deepStrictEqual(ev.properties.tags, ['neo4j', 'conf']);
 });
+
+runOnAdapters('UNWIND literal list returns rows', async engine => {
+  const out = [];
+  for await (const row of engine.run('UNWIND [1,2,3] AS x RETURN x')) out.push(row.x);
+  assert.deepStrictEqual(out.sort(), [1, 2, 3]);
+});
+
+runOnAdapters('UNWIND expression on list items', async engine => {
+  const out = [];
+  for await (const row of engine.run('UNWIND [1,2,3] AS x RETURN x + 1')) out.push(row.value);
+  assert.deepStrictEqual(out.sort(), [2, 3, 4]);
+});
+
+runOnAdapters('UNWIND nodes from path', async engine => {
+  const script =
+    'MATCH p=(a:Person {name:"Alice"})-[*]->(g:Genre {name:"Action"}) RETURN p; ' +
+    'UNWIND nodes(p) AS n RETURN n';
+  const out = [];
+  for await (const row of engine.run(script)) if (row.n) out.push(row.n);
+  assert.strictEqual(out.length, 3);
+});
