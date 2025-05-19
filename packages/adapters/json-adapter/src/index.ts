@@ -11,7 +11,7 @@ import type * as fsType from 'fs';
 // Declare Node's require for TypeScript without pulling in Node types
 declare var require: (module: string) => unknown;
 
-interface Dataset {
+export interface Dataset {
   nodes: NodeRecord[];
   relationships: RelRecord[];
 }
@@ -65,6 +65,10 @@ export class JsonAdapter implements StorageAdapter {
       }
       this.indexData.set(key, map);
     }
+  }
+
+  exportData(): Dataset {
+    return this.data;
   }
 
   async getNodeById(id: number | string): Promise<NodeRecord | null> {
