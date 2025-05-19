@@ -20,6 +20,12 @@ export interface StorageAdapter {
   getNodeById(id: number | string): Promise<NodeRecord | null>;
   scanNodes(spec?: NodeScanSpec): AsyncIterable<NodeRecord>;
 
+  /** Optional: create a new node. Returns the created record. */
+  createNode?(labels: string[], properties: Record<string, unknown>): Promise<NodeRecord>;
+
+  /** Optional: find a node by labels and exact property match. */
+  findNode?(labels: string[], properties: Record<string, unknown>): Promise<NodeRecord | null>;
+
   getRelationshipById?(id: number | string): Promise<RelRecord | null>;
   scanRelationships?(): AsyncIterable<RelRecord>;
 }
