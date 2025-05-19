@@ -21,7 +21,48 @@ export interface MergeQuery {
   returnVariable?: string;
 }
 
-export type CypherAST = MatchReturnQuery | CreateQuery | MergeQuery;
+export interface MatchDeleteQuery {
+  type: 'MatchDelete';
+  variable: string;
+  label?: string;
+  properties?: Record<string, unknown>;
+  isRelationship?: boolean;
+}
+
+export interface MatchSetQuery {
+  type: 'MatchSet';
+  variable: string;
+  label?: string;
+  properties?: Record<string, unknown>;
+  property: string;
+  value: unknown;
+  isRelationship?: boolean;
+  returnVariable?: string;
+}
+
+export interface CreateRelQuery {
+  type: 'CreateRel';
+  relVariable: string;
+  relType: string;
+  relProperties?: Record<string, unknown>;
+  start: {
+    label?: string;
+    properties?: Record<string, unknown>;
+  };
+  end: {
+    label?: string;
+    properties?: Record<string, unknown>;
+  };
+  returnVariable?: string;
+}
+
+export type CypherAST =
+  | MatchReturnQuery
+  | CreateQuery
+  | MergeQuery
+  | MatchDeleteQuery
+  | MatchSetQuery
+  | CreateRelQuery;
 
 interface Token {
   type: 'keyword' | 'identifier' | 'number' | 'string' | 'punct';
@@ -38,7 +79,7 @@ function tokenize(input: string): Token[] {
       i += ws[0].length;
       continue;
     }
-    const keyword = /^(MATCH|RETURN|CREATE|MERGE)\b/i.exec(rest);
+    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE)\b/i.exec(rest);
     if (keyword) {
       tokens.push({ type: 'keyword', value: keyword[1].toUpperCase() });
       i += keyword[0].length;
@@ -62,7 +103,7 @@ function tokenize(input: string): Token[] {
       i += num[0].length;
       continue;
     }
-    const punct = /^[(){}:,]/.exec(rest);
+    const punct = /^[(){}:,\.\[\]=>-]/.exec(rest);
     if (punct) {
       tokens.push({ type: 'punct', value: punct[0] });
       i += punct[0].length;
@@ -104,7 +145,7 @@ class Parser {
     if (!tok || tok.type !== 'keyword') {
       throw new Error('Expected query keyword');
     }
-    if (tok.value === 'MATCH') return this.parseMatchReturn();
+    if (tok.value === 'MATCH') return this.parseMatch();
     if (tok.value === 'CREATE') return this.parseCreate();
     if (tok.value === 'MERGE') return this.parseMerge();
     throw new Error('Parse error: unsupported query');
@@ -114,7 +155,7 @@ class Parser {
     return this.consume('identifier').value;
   }
 
-  private parsePattern() {
+  private parseNodePattern() {
     this.consume('punct', '(');
     const variable = this.parseIdentifier();
     let label: string | undefined;
@@ -128,6 +169,46 @@ class Parser {
     }
     this.consume('punct', ')');
     return { variable, label, properties };
+  }
+
+  private parseMaybeNodePattern() {
+    this.consume('punct', '(');
+    let variable: string | undefined;
+    if (this.current()?.type === 'identifier') {
+      variable = this.parseIdentifier();
+    }
+    let label: string | undefined;
+    if (this.optional('punct', ':')) {
+      label = this.parseIdentifier();
+    }
+    let properties: Record<string, unknown> | undefined;
+    if (this.optional('punct', '{')) {
+      properties = this.parseProperties();
+      this.consume('punct', '}');
+    }
+    this.consume('punct', ')');
+    return { variable, label, properties };
+  }
+
+  private parseRelationshipPattern() {
+    this.parseMaybeNodePattern();
+    this.consume('punct', '-');
+    this.consume('punct', '[');
+    const variable = this.parseIdentifier();
+    let type: string | undefined;
+    if (this.optional('punct', ':')) {
+      type = this.parseIdentifier();
+    }
+    let properties: Record<string, unknown> | undefined;
+    if (this.optional('punct', '{')) {
+      properties = this.parseProperties();
+      this.consume('punct', '}');
+    }
+    this.consume('punct', ']');
+    this.consume('punct', '-');
+    this.consume('punct', '>');
+    this.parseMaybeNodePattern();
+    return { variable, type, properties };
   }
 
   private parseProperties(): Record<string, unknown> {
@@ -173,30 +254,110 @@ class Parser {
     return undefined;
   }
 
-  private parseMatchReturn(): MatchReturnQuery {
+  private parseMatch(): CypherAST {
     this.consume('keyword', 'MATCH');
-    const pattern = this.parsePattern();
-    this.consume('keyword', 'RETURN');
-    const ret = this.parseIdentifier();
-    if (ret !== pattern.variable) {
-      throw new Error('Parse error: return variable mismatch');
+    let pattern: { variable: string; label?: string; properties?: Record<string, unknown>; isRel?: boolean };
+    const start = this.parseMaybeNodePattern();
+    if (this.current()?.value === '-') {
+      this.consume('punct', '-');
+      this.consume('punct', '[');
+      const relVar = this.parseIdentifier();
+      let relType: string | undefined;
+      if (this.optional('punct', ':')) {
+        relType = this.parseIdentifier();
+      }
+      let relProps: Record<string, unknown> | undefined;
+      if (this.optional('punct', '{')) {
+        relProps = this.parseProperties();
+        this.consume('punct', '}');
+      }
+      this.consume('punct', ']');
+      this.consume('punct', '-');
+      this.consume('punct', '>');
+      this.parseMaybeNodePattern();
+      pattern = { variable: relVar, label: relType, properties: relProps, isRel: true };
+    } else {
+      if (!start.variable) throw new Error('Parse error: node variable required');
+      pattern = { variable: start.variable, label: start.label, properties: start.properties, isRel: false };
     }
-    return { type: 'MatchReturn', variable: pattern.variable, label: pattern.label, properties: pattern.properties };
+    const next = this.current();
+    if (!next || next.type !== 'keyword') throw new Error('Expected keyword');
+    if (next.value === 'RETURN') {
+      this.consume('keyword', 'RETURN');
+      const ret = this.parseIdentifier();
+      if (ret !== pattern.variable) throw new Error('Parse error: return variable mismatch');
+      return { type: 'MatchReturn', variable: pattern.variable, label: pattern.label, properties: pattern.properties };
+    }
+    if (next.value === 'DELETE') {
+      this.consume('keyword', 'DELETE');
+      const id = this.parseIdentifier();
+      if (id !== pattern.variable) throw new Error('Parse error: delete variable mismatch');
+      return { type: 'MatchDelete', variable: pattern.variable, label: pattern.label, properties: pattern.properties, isRelationship: pattern.isRel };
+    }
+    if (next.value === 'SET') {
+      this.consume('keyword', 'SET');
+      const id = this.parseIdentifier();
+      if (id !== pattern.variable) throw new Error('Parse error: set variable mismatch');
+      this.consume('punct', '.');
+      const prop = this.parseIdentifier();
+      this.consume('punct', '=');
+      const value = this.parseValue();
+      const ret = this.parseReturnVariable();
+      if (ret && ret !== pattern.variable) throw new Error('Parse error: return variable mismatch');
+      return {
+        type: 'MatchSet',
+        variable: pattern.variable,
+        label: pattern.label,
+        properties: pattern.properties,
+        property: prop,
+        value,
+        isRelationship: pattern.isRel,
+        returnVariable: ret,
+      };
+    }
+    throw new Error('Parse error: unsupported MATCH clause');
   }
 
-  private parseCreate(): CreateQuery {
+  private parseCreate(): CypherAST {
     this.consume('keyword', 'CREATE');
-    const pattern = this.parsePattern();
+    const start = this.parseNodePattern();
+    if (this.current()?.value === '-') {
+      this.consume('punct', '-');
+      this.consume('punct', '[');
+      const relVar = this.parseIdentifier();
+      this.consume('punct', ':');
+      const relType = this.parseIdentifier();
+      let relProps: Record<string, unknown> | undefined;
+      if (this.optional('punct', '{')) {
+        relProps = this.parseProperties();
+        this.consume('punct', '}');
+      }
+      this.consume('punct', ']');
+      this.consume('punct', '-');
+      this.consume('punct', '>');
+      const end = this.parseNodePattern();
+      const ret = this.parseReturnVariable();
+      if (ret && ret !== relVar) throw new Error('Parse error: return variable mismatch');
+      return {
+        type: 'CreateRel',
+        relVariable: relVar,
+        relType,
+        relProperties: relProps,
+        start: { label: start.label, properties: start.properties },
+        end: { label: end.label, properties: end.properties },
+        returnVariable: ret,
+      };
+    }
     const ret = this.parseReturnVariable();
-    if (ret && ret !== pattern.variable) {
+    if (ret && ret !== start.variable) {
       throw new Error('Parse error: return variable mismatch');
     }
-    return { type: 'Create', variable: pattern.variable, label: pattern.label, properties: pattern.properties, returnVariable: ret };
+    return { type: 'Create', variable: start.variable, label: start.label, properties: start.properties, returnVariable: ret };
   }
 
   private parseMerge(): MergeQuery {
     this.consume('keyword', 'MERGE');
-    const pattern = this.parsePattern();
+    const pattern = this.parseNodePattern();
     const ret = this.parseReturnVariable();
     if (ret && ret !== pattern.variable) {
       throw new Error('Parse error: return variable mismatch');
