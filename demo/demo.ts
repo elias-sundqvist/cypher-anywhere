@@ -16,7 +16,7 @@ const engine = new CypherEngine({ adapter });
 
 function refreshGraph() {
   const graphElem = document.getElementById('graph');
-  if (graphElem) graphElem.textContent = JSON.stringify(dataset, null, 2);
+  if (graphElem) graphElem.textContent = JSON.stringify(adapter.exportData(), null, 2);
 }
 
 refreshGraph();
