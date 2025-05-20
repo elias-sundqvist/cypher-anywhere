@@ -639,6 +639,14 @@ runOnAdapters('undirected single hop match', async engine => {
   assert.deepStrictEqual(out.sort(), expected.sort());
 });
 
+runOnAdapters('single hop match with WHERE', async engine => {
+  const q = 'MATCH (p:Person)-[:ACTED_IN]->(m:Movie) WHERE m.title = "John Wick" RETURN p, m';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(`${row.p.properties.name}-${row.m.properties.title}`);
+  const expected = ['Alice-John Wick', 'Bob-John Wick'];
+  assert.deepStrictEqual(out.sort(), expected.sort());
+});
+
 runOnAdapters('negative numeric literals parsed correctly', async engine => {
   let node;
   for await (const row of engine.run('CREATE (n:Neg {val:-5}) RETURN n')) node = row.n;

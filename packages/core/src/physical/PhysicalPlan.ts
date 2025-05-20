@@ -658,6 +658,7 @@ export function logicalToPhysical(
           varsLocal: Map<string, any>
         ): Promise<void> => {
           if (hop >= plan.hops.length) {
+            if (plan.where && !evalWhere(plan.where, varsLocal, params)) return;
             const row: Record<string, unknown> = {};
             const aliasVars = new Map(varsLocal);
             plan.returnItems.forEach((item, idx) => {

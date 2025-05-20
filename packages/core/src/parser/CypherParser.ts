@@ -171,6 +171,7 @@ export interface MatchChainQuery {
   orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
   skip?: number;
   limit?: number;
+  where?: WhereClause;
 }
 
 export type CypherAST =
@@ -648,6 +649,11 @@ class Parser {
       });
       current = next;
     }
+    let where: WhereClause | undefined;
+    if (this.current()?.value === 'WHERE') {
+      this.consume('keyword', 'WHERE');
+      where = this.parseWhereClause();
+    }
     const ret = this.parseReturnClause();
     if (!ret.items.length) throw new Error('Parse error: RETURN required');
     return {
@@ -658,6 +664,7 @@ class Parser {
         properties: start.properties,
       },
       hops,
+      where,
       returnItems: ret.items,
       orderBy: ret.orderBy,
       skip: ret.skip,
