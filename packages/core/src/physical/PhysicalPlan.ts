@@ -93,6 +93,8 @@ function evalWhere(
           return (l as any) <= (r as any);
         case '<>':
           return l !== r;
+        case 'IN':
+          return Array.isArray(r) && r.includes(l);
         default:
           throw new Error('Unknown operator');
       }
