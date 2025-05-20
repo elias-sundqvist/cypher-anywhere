@@ -660,10 +660,18 @@ export function logicalToPhysical(
           const step = plan.hops[hop];
           for await (const rel of scanRels()) {
             if (step.rel.type && rel.type !== step.rel.type) continue;
+            const nextIds: Array<number | string> = [];
             if (step.rel.direction === 'out') {
               if (rel.startNode !== node.id) continue;
-            } else {
+              nextIds.push(rel.endNode);
+            } else if (step.rel.direction === 'in') {
               if (rel.endNode !== node.id) continue;
+              nextIds.push(rel.startNode);
+            } else {
+              if (rel.startNode === node.id) nextIds.push(rel.endNode);
+              if (rel.endNode === node.id && rel.endNode !== rel.startNode)
+                nextIds.push(rel.startNode);
+              if (nextIds.length === 0) continue;
             }
             if (step.rel.properties) {
               let ok = true;
@@ -675,26 +683,29 @@ export function logicalToPhysical(
               }
               if (!ok) continue;
             }
-            const nextId =
-              step.rel.direction === 'out' ? rel.endNode : rel.startNode;
-            const nextNode = await getNode(nextId);
-            if (!nextNode) continue;
-            if (step.node.labels && !step.node.labels.every(l => nextNode.labels.includes(l)))
-              continue;
-            if (step.node.properties) {
-              let ok = true;
-              for (const [k, v] of Object.entries(step.node.properties)) {
-                if (nextNode.properties[k] !== evalPropValue(v, varsLocal, params)) {
-                  ok = false;
-                  break;
+            for (const nextId of nextIds) {
+              const nextNode = await getNode(nextId);
+              if (!nextNode) continue;
+              if (
+                step.node.labels &&
+                !step.node.labels.every(l => nextNode.labels.includes(l))
+              )
+                continue;
+              if (step.node.properties) {
+                let ok = true;
+                for (const [k, v] of Object.entries(step.node.properties)) {
+                  if (nextNode.properties[k] !== evalPropValue(v, varsLocal, params)) {
+                    ok = false;
+                    break;
+                  }
                 }
+                if (!ok) continue;
               }
-              if (!ok) continue;
+              const varsNext = new Map(varsLocal);
+              if (step.rel.variable) varsNext.set(step.rel.variable, rel);
+              varsNext.set(step.node.variable, nextNode);
+              await traverse(nextNode, hop + 1, varsNext);
             }
-            const varsNext = new Map(varsLocal);
-            if (step.rel.variable) varsNext.set(step.rel.variable, rel);
-            varsNext.set(step.node.variable, nextNode);
-            await traverse(nextNode, hop + 1, varsNext);
           }
         };
         for (const s of startNodes) {

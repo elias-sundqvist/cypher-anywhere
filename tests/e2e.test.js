@@ -615,6 +615,14 @@ runOnAdapters('single hop incoming match without labels', async engine => {
   assert.deepStrictEqual(out.sort(), expected.sort());
 });
 
+runOnAdapters('undirected single hop match', async engine => {
+  const q = 'MATCH (p:Person)-[:ACTED_IN]-(m:Movie) RETURN p, m';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(`${row.p.properties.name}-${row.m.properties.title}`);
+  const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
+  assert.deepStrictEqual(out.sort(), expected.sort());
+});
+
 runOnAdapters('negative numeric literals parsed correctly', async engine => {
   let node;
   for await (const row of engine.run('CREATE (n:Neg {val:-5}) RETURN n')) node = row.n;
