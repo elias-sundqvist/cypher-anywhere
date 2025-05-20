@@ -129,8 +129,16 @@ export interface MergeRelQuery {
   relVariable?: string;
   relType: string;
   relProperties?: Record<string, unknown>;
-  startVariable: string;
-  endVariable: string;
+  start: {
+    variable?: string;
+    labels?: string[];
+    properties?: Record<string, unknown>;
+  };
+  end: {
+    variable?: string;
+    labels?: string[];
+    properties?: Record<string, unknown>;
+  };
   onCreateSet?: Record<string, Expression>;
   onMatchSet?: Record<string, Expression>;
   returnVariable?: string;
@@ -1136,14 +1144,13 @@ class Parser {
       }
       const ret = this.parseReturnVariable();
       if (ret && ret !== relVar) throw new Error('Parse error: return variable mismatch');
-      if (!start.variable || !end.variable) throw new Error('Parse error: node variables required');
       return {
         type: 'MergeRel',
         relVariable: relVar,
         relType,
         relProperties: relProps,
-        startVariable: start.variable,
-        endVariable: end.variable,
+        start: { variable: start.variable, labels: start.labels, properties: start.properties },
+        end: { variable: end.variable, labels: end.labels, properties: end.properties },
         returnVariable: ret,
         onCreateSet: onCreate,
         onMatchSet: onMatch,

@@ -41,8 +41,17 @@ test('parse MERGE (a)-[r:REL]->(b) RETURN r', () => {
   const ast = parse('MERGE (a)-[r:REL]->(b) RETURN r');
   assert.strictEqual(ast.type, 'MergeRel');
   assert.strictEqual(ast.relType, 'REL');
-  assert.strictEqual(ast.startVariable, 'a');
-  assert.strictEqual(ast.endVariable, 'b');
+  assert.strictEqual(ast.start.variable, 'a');
+  assert.strictEqual(ast.end.variable, 'b');
+});
+
+test('parse MERGE (a:Person {name:"A"})-[r:REL]->(b:Person {name:"B"}) RETURN r', () => {
+  const ast = parse('MERGE (a:Person {name:"A"})-[r:REL]->(b:Person {name:"B"}) RETURN r');
+  assert.strictEqual(ast.type, 'MergeRel');
+  assert.strictEqual(ast.start.labels[0], 'Person');
+  assert.strictEqual(ast.start.properties.name, 'A');
+  assert.strictEqual(ast.end.labels[0], 'Person');
+  assert.strictEqual(ast.end.properties.name, 'B');
 });
 
 test('parseMany splits semicolon separated statements', () => {
