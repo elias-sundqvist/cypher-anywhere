@@ -20,7 +20,12 @@ function evalExpr(
       return rec.properties[expr.property];
     }
     case 'Variable':
-      return vars.get(expr.name);
+      {
+        const val = vars.get(expr.name);
+        if (val && typeof val === 'object' && 'nodes' in val && 'relationships' in val)
+          return (val as any).nodes;
+        return val;
+      }
     case 'Parameter':
       return params[expr.name];
     case 'Add':
@@ -55,9 +60,23 @@ function evalExpr(
       return NaN;
     }
     case 'Nodes':
-      return vars.get(expr.variable);
+      {
+        const val = vars.get(expr.variable);
+        if (val && typeof val === 'object' && 'nodes' in val) return (val as any).nodes;
+        return val;
+      }
+    case 'Relationships':
+      {
+        const val = vars.get(expr.variable);
+        if (val && typeof val === 'object' && 'relationships' in val)
+          return (val as any).relationships;
+        return undefined;
+      }
     case 'Length': {
       const val = vars.get(expr.variable);
+      if (val && typeof val === 'object' && 'relationships' in val) {
+        return (val as any).relationships.length;
+      }
       if (Array.isArray(val)) {
         return val.length > 0 ? val.length - 1 : 0;
       }
@@ -89,7 +108,7 @@ async function* findPaths(
   maxHops = Infinity,
   direction: 'out' | 'in' | 'none' = 'out',
   relType?: string
-): AsyncIterable<NodeRecord[]> {
+): AsyncIterable<{ nodes: NodeRecord[]; relationships: RelRecord[] }> {
   if (!adapter.scanRelationships || !adapter.getNodeById) {
     throw new Error('Adapter does not support path finding');
   }
@@ -98,9 +117,11 @@ async function* findPaths(
     if (relType && r.type !== relType) continue;
     rels.push(r);
   }
-  const queue: (Array<number | string>)[] = [[startId]];
+  const queue: { nodes: Array<number | string>; relationships: RelRecord[] }[] = [
+    { nodes: [startId], relationships: [] },
+  ];
   while (queue.length > 0) {
-    const path = queue.shift()!;
+    const { nodes: path, relationships: pathRels } = queue.shift()!;
     const last = path[path.length - 1];
     const hops = path.length - 1;
     if (last === endId && hops >= minHops && hops <= maxHops && hops > 0) {
@@ -110,21 +131,21 @@ async function* findPaths(
         if (!n) return;
         nodes.push(n);
       }
-      yield nodes;
+      yield { nodes, relationships: pathRels };
     }
     if (hops >= maxHops) continue;
     for (const rel of rels) {
       if (direction === 'out' || direction === 'none') {
         if (rel.startNode === last) {
           if (!path.includes(rel.endNode)) {
-            queue.push([...path, rel.endNode]);
+            queue.push({ nodes: [...path, rel.endNode], relationships: [...pathRels, rel] });
           }
         }
       }
       if (direction === 'in' || direction === 'none') {
         if (rel.endNode === last) {
           if (!path.includes(rel.startNode)) {
-            queue.push([...path, rel.startNode]);
+            queue.push({ nodes: [...path, rel.startNode], relationships: [...pathRels, rel] });
           }
         }
       }
@@ -1361,7 +1382,7 @@ export function logicalToPhysical(
           node: NodeRecord,
           hop: number,
           varsLocal: Map<string, any>,
-          path: NodeRecord[]
+          path: { nodes: NodeRecord[]; relationships: RelRecord[] }
         ): Promise<void> => {
           if (hop >= plan.hops.length) {
             const aliasVars = new Map(varsLocal);
@@ -1466,14 +1487,17 @@ export function logicalToPhysical(
               const varsNext = new Map(varsLocal);
               if (step.rel.variable) varsNext.set(step.rel.variable, rel);
               varsNext.set(step.node.variable, nextNode);
-              await traverse(nextNode, hop + 1, varsNext, [...path, nextNode]);
+              await traverse(nextNode, hop + 1, varsNext, {
+                nodes: [...path.nodes, nextNode],
+                relationships: [...path.relationships, rel],
+              });
             }
           }
         };
         for (const s of startNodes) {
           const varsStart = new Map(vars);
           varsStart.set(plan.start.variable, s);
-          await traverse(s, 0, varsStart, [s]);
+          await traverse(s, 0, varsStart, { nodes: [s], relationships: [] });
         }
 
         if (hasAggFlag) {

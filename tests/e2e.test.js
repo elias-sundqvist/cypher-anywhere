@@ -712,6 +712,17 @@ runOnAdapters('UNWIND nodes from path', async engine => {
   assert.strictEqual(out.length, 3);
 });
 
+runOnAdapters('relationships() on path returns relationships', async engine => {
+  const q =
+    'MATCH p=(a:Person {name:"Alice"})-[:ACTED_IN]->(m:Movie {title:"The Matrix"}) RETURN relationships(p) AS rels';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.rels);
+  assert.strictEqual(out.length, 1);
+  assert.ok(Array.isArray(out[0]));
+  assert.strictEqual(out[0].length, 1);
+  assert.strictEqual(out[0][0].type, 'ACTED_IN');
+});
+
 runOnAdapters('OPTIONAL MATCH missing returns null row', async engine => {
   const out = [];
   for await (const row of engine.run('OPTIONAL MATCH (n:Missing) RETURN n')) out.push(row.n);

@@ -90,6 +90,7 @@ export type Expression =
   | { type: 'Collect'; expression: Expression; distinct?: boolean }
   | { type: 'Length'; variable: string }
   | { type: 'Type'; variable: string }
+  | { type: 'Relationships'; variable: string }
   | { type: 'All' };
 
 export type WhereClause =
@@ -628,6 +629,13 @@ class Parser {
         const inner = this.parseIdentifier();
         this.consume('punct', ')');
         return { type: 'Nodes', variable: inner };
+      }
+      if (tok.value === 'relationships' && this.lookahead()?.value === '(') {
+        this.pos++;
+        this.consume('punct', '(');
+        const inner = this.parseIdentifier();
+        this.consume('punct', ')');
+        return { type: 'Relationships', variable: inner };
       }
       if (tok.value === 'length' && this.lookahead()?.value === '(') {
         this.pos++;
