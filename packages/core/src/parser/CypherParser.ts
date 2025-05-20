@@ -89,6 +89,7 @@ export type Expression =
   | { type: 'Avg'; expression: Expression; distinct?: boolean }
   | { type: 'Collect'; expression: Expression; distinct?: boolean }
   | { type: 'Length'; variable: string }
+  | { type: 'Labels'; variable: string }
   | { type: 'Type'; variable: string }
   | { type: 'Relationships'; variable: string }
   | { type: 'All' };
@@ -652,6 +653,13 @@ class Parser {
         const inner = this.parseIdentifier();
         this.consume('punct', ')');
         return { type: 'Length', variable: inner };
+      }
+      if (tok.value === 'labels' && this.lookahead()?.value === '(') {
+        this.pos++;
+        this.consume('punct', '(');
+        const inner = this.parseIdentifier();
+        this.consume('punct', ')');
+        return { type: 'Labels', variable: inner };
       }
       if (tok.value === 'type' && this.lookahead()?.value === '(') {
         this.pos++;
