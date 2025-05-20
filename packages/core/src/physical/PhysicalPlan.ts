@@ -673,6 +673,7 @@ export function logicalToPhysical(
 
           const pat = plan.patterns[idx];
           let usedIndex = false;
+          let matched = false;
           if (
             pat.labels &&
             pat.labels.length > 0 &&
@@ -690,6 +691,7 @@ export function logicalToPhysical(
               for await (const node of adapter.indexLookup(label, prop, value)) {
                 const nextVars = new Map(varsLocal);
                 nextVars.set(pat.variable, node);
+                matched = true;
                 await traverse(idx + 1, nextVars);
               }
               usedIndex = true;
@@ -710,8 +712,14 @@ export function logicalToPhysical(
               }
               const nextVars = new Map(varsLocal);
               nextVars.set(pat.variable, node);
+              matched = true;
               await traverse(idx + 1, nextVars);
             }
+          }
+          if (!matched && plan.optional) {
+            const nextVars = new Map(varsLocal);
+            nextVars.set(pat.variable, undefined);
+            await traverse(idx + 1, nextVars);
           }
         };
 

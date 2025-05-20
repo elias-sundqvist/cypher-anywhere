@@ -657,6 +657,15 @@ runOnAdapters('OPTIONAL MATCH existing node returns it', async engine => {
   assert.strictEqual(out[0].properties.name, 'Alice');
 });
 
+runOnAdapters('OPTIONAL MATCH multiple patterns returns partial row', async engine => {
+  const q = 'OPTIONAL MATCH (p:Person {name:"Missing"}), (m:Movie {title:"The Matrix"}) RETURN p, m';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].m.properties.title, 'The Matrix');
+  assert.strictEqual(out[0].p, undefined);
+});
+
 runOnAdapters('ORDER BY with SKIP and LIMIT', async engine => {
   const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY n.name SKIP 1 LIMIT 1';
   const out = [];
