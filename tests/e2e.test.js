@@ -1288,3 +1288,24 @@ runOnAdapters('length() on string expression returns length', async engine => {
   for await (const row of engine.run(q)) out.push(row.len);
   assert.deepStrictEqual(out, [3]);
 });
+
+runOnAdapters('size() on list expression returns length', async engine => {
+  const q = 'RETURN size([1,2,3]) AS len';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.len);
+  assert.deepStrictEqual(out, [3]);
+});
+
+runOnAdapters('size() on string expression returns length', async engine => {
+  const q = "RETURN size('abc') AS len";
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.len);
+  assert.deepStrictEqual(out, [3]);
+});
+
+runOnAdapters('size() on path returns hop count', async engine => {
+  const q = 'MATCH p=(a:Person {name:"Alice"})-[:ACTED_IN]->(m:Movie {title:"The Matrix"}) RETURN size(p) AS len';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.len);
+  assert.deepStrictEqual(out, [1]);
+});
