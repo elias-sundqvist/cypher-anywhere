@@ -174,6 +174,8 @@ export interface MatchPathQuery {
     labels?: string[];
     properties?: Record<string, unknown>;
   };
+  minHops?: number;
+  maxHops?: number;
   returnItems?: ReturnItem[];
   orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
   skip?: Expression;
@@ -910,6 +912,20 @@ class Parser {
       this.consume('punct', '-');
       this.consume('punct', '[');
       this.consume('punct', '*');
+      let minHops: number | undefined;
+      let maxHops: number | undefined;
+      if (this.current()?.type === 'number') {
+        minHops = Number(this.consume('number').value);
+      }
+      if (this.current()?.value === '.' && this.lookahead()?.value === '.') {
+        this.consume('punct', '.');
+        this.consume('punct', '.');
+        if (this.current()?.type === 'number') {
+          maxHops = Number(this.consume('number').value);
+        }
+      } else if (minHops !== undefined) {
+        maxHops = minHops;
+      }
       this.consume('punct', ']');
       this.consume('punct', '-');
       this.consume('punct', '>');
@@ -932,6 +948,8 @@ class Parser {
         pathVariable,
         start: { variable: start.variable, labels: start.labels, properties: start.properties },
         end: { variable: end.variable, labels: end.labels, properties: end.properties },
+        minHops,
+        maxHops,
         returnItems,
         orderBy,
         skip,

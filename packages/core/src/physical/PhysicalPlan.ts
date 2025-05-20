@@ -64,7 +64,9 @@ function evalExpr(
 async function findPath(
   adapter: StorageAdapter,
   startId: number | string,
-  endId: number | string
+  endId: number | string,
+  minHops = 1,
+  maxHops = Infinity
 ): Promise<NodeRecord[] | null> {
   if (!adapter.scanRelationships || !adapter.getNodeById) {
     throw new Error('Adapter does not support path finding');
@@ -72,11 +74,12 @@ async function findPath(
   const rels: RelRecord[] = [];
   for await (const r of adapter.scanRelationships()) rels.push(r);
   const queue: (Array<number | string>)[] = [[startId]];
-  const visited = new Set<number | string>([startId]);
+  const visited = new Set<string>([`${startId}:0`]);
   while (queue.length > 0) {
     const path = queue.shift()!;
     const last = path[path.length - 1];
-    if (last === endId && path.length > 1) {
+    const hops = path.length - 1;
+    if (last === endId && hops >= minHops && hops <= maxHops && hops > 0) {
       const nodes: NodeRecord[] = [];
       for (const id of path) {
         const n = await adapter.getNodeById(id);
@@ -85,10 +88,14 @@ async function findPath(
       }
       return nodes;
     }
+    if (hops >= maxHops) continue;
     for (const rel of rels) {
-      if (rel.startNode === last && !visited.has(rel.endNode)) {
-        visited.add(rel.endNode);
-        queue.push([...path, rel.endNode]);
+      if (rel.startNode === last) {
+        const key = `${rel.endNode}:${hops + 1}`;
+        if (!visited.has(key)) {
+          visited.add(key);
+          queue.push([...path, rel.endNode]);
+        }
       }
     }
   }
@@ -1119,7 +1126,13 @@ export function logicalToPhysical(
         const rows: { row: Record<string, unknown>; order?: any }[] = [];
         for (const s of starts) {
           for (const e of ends) {
-            const path = await findPath(adapter, s.id, e.id);
+            const path = await findPath(
+              adapter,
+              s.id,
+              e.id,
+              plan.minHops ?? 1,
+              plan.maxHops ?? Infinity
+            );
             if (!path) continue;
             vars.set(plan.pathVariable, path);
             const local = new Map(vars);
