@@ -262,6 +262,17 @@ runOnAdapters('merge relationship without variable', async (engine, adapter) => 
   assert.strictEqual(likes[0].endNode, 3);
 });
 
+runOnAdapters('merge relationship creates nodes from pattern', async (engine, adapter) => {
+  const q = 'MERGE (p:Person {name:"Frank"})-[r:LIKES]->(g:Genre {name:"Action"}) RETURN r';
+  let rel;
+  for await (const row of engine.run(q)) if (row.r) rel = row.r;
+  assert.ok(rel);
+  const frank = await adapter.findNode(['Person'], { name: 'Frank' });
+  assert.ok(frank);
+  assert.strictEqual(rel.startNode, frank.id);
+  assert.strictEqual(rel.endNode, 6);
+});
+
 
 runOnAdapters('relationship deleted is gone', async engine => {
   for await (const _ of engine.run('MATCH ()-[r:ACTED_IN {role:"Buddy"}]->() DELETE r')) {}

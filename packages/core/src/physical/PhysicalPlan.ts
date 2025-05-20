@@ -980,18 +980,57 @@ export function logicalToPhysical(
         break;
       }
       case 'MergeRel': {
-        if (!adapter.scanRelationships || !adapter.createRelationship)
+        if (
+          !adapter.scanRelationships ||
+          !adapter.createRelationship ||
+          !adapter.findNode ||
+          !adapter.createNode
+        )
           throw new Error('Adapter does not support MERGE');
-        const startNode = vars.get(plan.startVariable) as NodeRecord | undefined;
-        const endNode = vars.get(plan.endVariable) as NodeRecord | undefined;
-        if (!startNode || !endNode)
-          throw new Error('MergeRel requires bound start and end variables');
+
+        let startNode: NodeRecord | null | undefined =
+          plan.start.variable
+            ? (vars.get(plan.start.variable) as NodeRecord | undefined)
+            : undefined;
+        if (!startNode) {
+          startNode = await adapter.findNode(
+            plan.start.labels ?? [],
+            evalProps(plan.start.properties ?? {}, vars, params)
+          );
+          if (!startNode) {
+            startNode = await adapter.createNode(
+              plan.start.labels ?? [],
+              evalProps(plan.start.properties ?? {}, vars, params)
+            );
+          }
+          if (plan.start.variable) vars.set(plan.start.variable, startNode);
+        }
+
+        let endNode: NodeRecord | null | undefined =
+          plan.end.variable
+            ? (vars.get(plan.end.variable) as NodeRecord | undefined)
+            : undefined;
+        if (!endNode) {
+          endNode = await adapter.findNode(
+            plan.end.labels ?? [],
+            evalProps(plan.end.properties ?? {}, vars, params)
+          );
+          if (!endNode) {
+            endNode = await adapter.createNode(
+              plan.end.labels ?? [],
+              evalProps(plan.end.properties ?? {}, vars, params)
+            );
+          }
+          if (plan.end.variable) vars.set(plan.end.variable, endNode);
+        }
+        const sNode = startNode as NodeRecord;
+        const eNode = endNode as NodeRecord;
         let existing: RelRecord | null = null;
         for await (const rel of adapter.scanRelationships()) {
           if (
             rel.type === plan.relType &&
-            rel.startNode === startNode.id &&
-            rel.endNode === endNode.id
+            rel.startNode === sNode.id &&
+            rel.endNode === eNode.id
           ) {
             let ok = true;
             if (plan.relProperties) {
@@ -1012,8 +1051,8 @@ export function logicalToPhysical(
         if (!existing) {
           existing = await adapter.createRelationship(
             plan.relType,
-            startNode.id,
-            endNode.id,
+            sNode.id,
+            eNode.id,
             evalProps(plan.relProperties ?? {}, vars, params)
           );
           created = true;
