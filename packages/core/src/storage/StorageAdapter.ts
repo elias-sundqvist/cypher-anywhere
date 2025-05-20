@@ -12,6 +12,11 @@ export interface RelRecord {
   properties: Record<string, unknown>;
 }
 
+export interface PathRecord {
+  nodes: NodeRecord[];
+  relationships: RelRecord[];
+}
+
 export interface NodeScanSpec {
   label?: string;
   labels?: string[];
