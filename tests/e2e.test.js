@@ -494,6 +494,22 @@ runOnAdapters('length() on path returns hop count', async engine => {
   assert.deepStrictEqual(out, [2]);
 });
 
+runOnAdapters('variable length path with range', async engine => {
+  const q =
+    'MATCH p=(a:Person {name:"Alice"})-[*1..3]->(g:Genre {name:"Action"}) RETURN length(p) AS len';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.len);
+  assert.deepStrictEqual(out, [2]);
+});
+
+runOnAdapters('variable length path exact length', async engine => {
+  const q =
+    'MATCH p=(a:Person {name:"Alice"})-[*1]->(m:Movie) RETURN length(p) AS len';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.len);
+  assert.deepStrictEqual(out.sort(), [1, 1]);
+});
+
 runOnAdapters('multi-hop ->()-> chain returns final node', async engine => {
   const out = [];
   const q =
