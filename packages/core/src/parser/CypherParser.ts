@@ -686,7 +686,7 @@ class Parser {
         this.consume('punct', ')');
         return { type: 'Relationships', variable: inner };
       }
-      if (tok.value === 'length' && this.lookahead()?.value === '(') {
+      if ((tok.value === 'length' || tok.value === 'size') && this.lookahead()?.value === '(') {
         this.pos++;
         this.consume('punct', '(');
         const inner = this.parseValue();
