@@ -148,6 +148,178 @@ function evalProps(
   return out;
 }
 
+function hasAgg(expr: Expression): boolean {
+  switch (expr.type) {
+    case 'Count':
+    case 'Sum':
+    case 'Min':
+    case 'Max':
+    case 'Avg':
+      return true;
+    case 'Add':
+    case 'Sub':
+      return hasAgg(expr.left) || hasAgg(expr.right);
+    default:
+      return false;
+  }
+}
+
+type AggState =
+  | {
+      type: 'Count';
+      distinct?: boolean;
+      expr: Expression | null;
+      count: number;
+      values: Set<string>;
+    }
+  | {
+      type: 'Sum' | 'Min' | 'Max';
+      distinct?: boolean;
+      expr: Expression;
+      sum?: number;
+      min?: any;
+      max?: any;
+      values: Set<string>;
+    }
+  | {
+      type: 'Avg';
+      distinct?: boolean;
+      expr: Expression;
+      sum: number;
+      count: number;
+      values: Set<string>;
+    }
+  | { type: 'Add' | 'Sub'; left: AggState | null; right: AggState | null };
+
+function initAggState(expr: Expression): AggState | null {
+  switch (expr.type) {
+    case 'Count':
+      return { type: 'Count', distinct: expr.distinct, expr: expr.expression, count: 0, values: new Set() };
+    case 'Sum':
+    case 'Min':
+    case 'Max':
+      return { type: expr.type, distinct: expr.distinct, expr: expr.expression, sum: 0, min: undefined, max: undefined, values: new Set() };
+    case 'Avg':
+      return { type: 'Avg', distinct: expr.distinct, expr: expr.expression, sum: 0, count: 0, values: new Set() };
+    case 'Add':
+    case 'Sub': {
+      const left = initAggState(expr.left);
+      const right = initAggState(expr.right);
+      return left || right ? { type: expr.type, left, right } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+function updateAggState(
+  expr: Expression,
+  state: AggState | null,
+  vars: Map<string, any>,
+  params: Record<string, any>
+) {
+  if (!state) return;
+  switch (state.type) {
+    case 'Count': {
+      const val = state.expr ? evalExpr(state.expr, vars, params) : null;
+      if (state.distinct) {
+        const key = JSON.stringify(val);
+        if (!state.values.has(key)) {
+          state.values.add(key);
+          state.count++;
+        }
+      } else {
+        state.count++;
+      }
+      break;
+    }
+    case 'Sum': {
+      const v = evalExpr(state.expr, vars, params);
+      let include = true;
+      if (state.distinct) {
+        const key = JSON.stringify(v);
+        if (state.values.has(key)) include = false;
+        else state.values.add(key);
+      }
+      if (include && typeof v === 'number') state.sum = (state.sum || 0) + v;
+      break;
+    }
+    case 'Min': {
+      const v = evalExpr(state.expr, vars, params);
+      let include = true;
+      if (state.distinct) {
+        const key = JSON.stringify(v);
+        if (state.values.has(key)) include = false;
+        else state.values.add(key);
+      }
+      if (include && (state.min === undefined || v < state.min)) state.min = v;
+      break;
+    }
+    case 'Max': {
+      const v = evalExpr(state.expr, vars, params);
+      let include = true;
+      if (state.distinct) {
+        const key = JSON.stringify(v);
+        if (state.values.has(key)) include = false;
+        else state.values.add(key);
+      }
+      if (include && (state.max === undefined || v > state.max)) state.max = v;
+      break;
+    }
+    case 'Avg': {
+      const v = evalExpr(state.expr, vars, params);
+      let include = true;
+      if (state.distinct) {
+        const key = JSON.stringify(v);
+        if (state.values.has(key)) include = false;
+        else state.values.add(key);
+      }
+      if (include && typeof v === 'number') {
+        state.sum += v;
+        state.count++;
+      }
+      break;
+    }
+    case 'Add':
+    case 'Sub':
+      updateAggState((expr as any).left, state.left, vars, params);
+      updateAggState((expr as any).right, state.right, vars, params);
+      break;
+  }
+}
+
+function finalizeAgg(
+  expr: Expression,
+  state: AggState | null,
+  vars: Map<string, any>,
+  params: Record<string, any>
+): any {
+  switch (expr.type) {
+    case 'Add':
+      return (
+        finalizeAgg((expr as any).left, state ? (state as any).left : null, vars, params) +
+        finalizeAgg((expr as any).right, state ? (state as any).right : null, vars, params)
+      );
+    case 'Sub':
+      return (
+        finalizeAgg((expr as any).left, state ? (state as any).left : null, vars, params) -
+        finalizeAgg((expr as any).right, state ? (state as any).right : null, vars, params)
+      );
+    case 'Count':
+      return state ? (state as any).count : 0;
+    case 'Sum':
+      return state ? (state as any).sum ?? 0 : 0;
+    case 'Min':
+      return state ? (state as any).min : undefined;
+    case 'Max':
+      return state ? (state as any).max : undefined;
+    case 'Avg':
+      return state ? ((state as any).count ? (state as any).sum / (state as any).count : null) : null;
+    default:
+      return evalExpr(expr, vars, params);
+  }
+}
+
 export type PhysicalPlan = (
   vars: Map<string, any>,
   params: Record<string, any>
@@ -160,9 +332,8 @@ export function logicalToPhysical(
   return async function* (vars: Map<string, any>, params: Record<string, any>) {
     switch (plan.type) {
       case 'MatchReturn': {
-        const isAgg = (e: Expression): boolean =>
-          ['Count', 'Sum', 'Min', 'Max', 'Avg'].includes(e.type);
-        const hasAgg = plan.returnItems.some(r => isAgg(r.expression));
+        const hasAggItem: boolean[] = plan.returnItems.map(r => hasAgg(r.expression));
+        const hasAggFlag: boolean = hasAggItem.some((v: boolean) => v);
         const rows: { row: Record<string, unknown>; order?: any; record?: NodeRecord | RelRecord }[] = [];
         const aliasFor = (item: typeof plan.returnItems[number], idx: number): string => {
           if (item.alias) return item.alias;
@@ -170,14 +341,14 @@ export function logicalToPhysical(
           return plan.returnItems.length === 1 ? 'value' : `value${idx}`;
         };
 
-        const groups = new Map<string, { row: Record<string, unknown>; aggs: any[]; record?: NodeRecord | RelRecord }>();
+        const groups = new Map<string, { row: Record<string, unknown>; aggs: (AggState | null)[]; record?: NodeRecord | RelRecord }>();
 
         const collectAgg = async (rec: NodeRecord | RelRecord) => {
           vars.set(plan.variable, rec);
           if (plan.where && !evalWhere(plan.where, vars, params)) return;
           const keyParts: unknown[] = [];
-          for (const item of plan.returnItems) {
-            if (!isAgg(item.expression)) keyParts.push(evalExpr(item.expression, vars, params));
+          for (let i = 0; i < plan.returnItems.length; i++) {
+            if (!hasAggItem[i]) keyParts.push(evalExpr(plan.returnItems[i].expression, vars, params));
           }
           const key = JSON.stringify(keyParts);
           let group = groups.get(key);
@@ -185,7 +356,7 @@ export function logicalToPhysical(
             const row: Record<string, unknown> = {};
             let i = 0;
             plan.returnItems.forEach((item, idx) => {
-              if (!isAgg(item.expression)) {
+              if (!hasAggItem[idx]) {
                 row[aliasFor(item, idx)] = keyParts[i++];
               }
             });
@@ -193,74 +364,10 @@ export function logicalToPhysical(
             groups.set(key, group);
           }
           plan.returnItems.forEach((item, idx) => {
-            if (!isAgg(item.expression)) return;
+            if (!hasAggItem[idx]) return;
             const expr = item.expression;
-            const agg =
-              (group!.aggs[idx] =
-                group!.aggs[idx] ?? { count: 0, sum: 0, values: new Set<any>() });
-            switch (expr.type) {
-              case 'Count':
-                if (expr.distinct) {
-                  const val = expr.expression
-                    ? evalExpr(expr.expression, vars, params)
-                    : null;
-                  const key = JSON.stringify(val);
-                  if (!agg.values.has(key)) {
-                    agg.values.add(key);
-                    agg.count++;
-                  }
-                } else {
-                  agg.count++;
-                }
-                break;
-              case 'Sum': {
-                const v = evalExpr(expr.expression, vars, params);
-                let include = true;
-                if (expr.distinct) {
-                  const key = JSON.stringify(v);
-                  if (agg.values.has(key)) include = false;
-                  else agg.values.add(key);
-                }
-                if (include && typeof v === 'number') agg.sum += v;
-                break;
-              }
-              case 'Min': {
-                const v = evalExpr(expr.expression, vars, params);
-                let include = true;
-                if (expr.distinct) {
-                  const key = JSON.stringify(v);
-                  if (agg.values.has(key)) include = false;
-                  else agg.values.add(key);
-                }
-                if (include && (agg.min === undefined || v < agg.min)) agg.min = v;
-                break;
-              }
-              case 'Max': {
-                const v = evalExpr(expr.expression, vars, params);
-                let include = true;
-                if (expr.distinct) {
-                  const key = JSON.stringify(v);
-                  if (agg.values.has(key)) include = false;
-                  else agg.values.add(key);
-                }
-                if (include && (agg.max === undefined || v > agg.max)) agg.max = v;
-                break;
-              }
-              case 'Avg': {
-                const v = evalExpr(expr.expression, vars, params);
-                let include = true;
-                if (expr.distinct) {
-                  const key = JSON.stringify(v);
-                  if (agg.values.has(key)) include = false;
-                  else agg.values.add(key);
-                }
-                if (include && typeof v === 'number') {
-                  agg.sum += v;
-                  agg.count++;
-                }
-                break;
-              }
-            }
+            const current = (group!.aggs[idx] = group!.aggs[idx] ?? initAggState(expr));
+            updateAggState(expr, current, vars, params);
           });
         };
 
@@ -287,7 +394,7 @@ export function logicalToPhysical(
           rows.push({ row, order, record: rec });
         };
 
-        const collect = hasAgg ? collectAgg : collectSimple;
+        const collect = hasAggFlag ? collectAgg : collectSimple;
 
         if (plan.isRelationship) {
           if (!adapter.scanRelationships)
@@ -349,36 +456,24 @@ export function logicalToPhysical(
           }
         }
 
-        if (hasAgg) {
+        if (hasAggFlag) {
           if (
             groups.size === 0 &&
-            plan.returnItems.every(item => isAgg(item.expression))
+            hasAggItem.every((v: boolean) => v)
           ) {
             groups.set('__empty__', { row: {}, aggs: [] });
           }
           for (const group of groups.values()) {
+            const localVars = new Map(vars);
+            if (group.record) localVars.set(plan.variable, group.record);
             plan.returnItems.forEach((item, idx) => {
-              if (!isAgg(item.expression)) return;
-              const agg = group.aggs[idx] ?? { count: 0, sum: 0, values: new Set<any>() };
-              let val: any;
-              switch (item.expression.type) {
-                case 'Count':
-                  val = agg.count;
-                  break;
-                case 'Sum':
-                  val = agg.sum;
-                  break;
-                case 'Min':
-                  val = agg.min;
-                  break;
-                case 'Max':
-                  val = agg.max;
-                  break;
-                case 'Avg':
-                  val = agg.count ? agg.sum / agg.count : null;
-                  break;
-              }
-              group.row[aliasFor(item, idx)] = val;
+              if (!hasAggItem[idx]) return;
+              group.row[aliasFor(item, idx)] = finalizeAgg(
+                item.expression,
+                group.aggs[idx],
+                localVars,
+                params
+              );
             });
             let order: any[] | undefined;
             if (plan.orderBy) {
@@ -433,8 +528,17 @@ export function logicalToPhysical(
           vars.delete(plan.variable);
           const row: Record<string, unknown> = {};
           plan.returnItems.forEach((item, idx) => {
-            const val = evalExpr(item.expression, vars, params);
-            row[aliasFor(item, idx)] = val;
+            if (hasAggItem[idx]) {
+              row[aliasFor(item, idx)] = finalizeAgg(
+                item.expression,
+                initAggState(item.expression),
+                vars,
+                params
+              );
+            } else {
+              const val = evalExpr(item.expression, vars, params);
+              row[aliasFor(item, idx)] = val;
+            }
           });
           yield row;
         } else {
