@@ -949,3 +949,10 @@ runOnAdapters('WITH passes variable to subsequent MATCH', async engine => {
   for await (const row of engine.run(q)) out.push(row.title);
   assert.deepStrictEqual(out.sort(), ['John Wick', 'The Matrix']);
 });
+
+runOnAdapters('WITH after relationship chain returns nodes', async engine => {
+  const q = 'MATCH (p:Person)-[:ACTED_IN]->(m:Movie) WITH m RETURN m.title AS title';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.title);
+  assert.deepStrictEqual(out.sort(), ['John Wick', 'John Wick', 'The Matrix']);
+});

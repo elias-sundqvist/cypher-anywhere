@@ -213,7 +213,7 @@ export interface MatchChainQuery {
 
 export interface WithQuery {
   type: 'With';
-  source: MatchReturnQuery;
+  source: MatchReturnQuery | MatchChainQuery;
   next: CypherAST;
 }
 
@@ -785,11 +785,11 @@ class Parser {
     return left;
   }
 
-  private parseMatchChain(start: {
+  private parseChainPattern(start: {
     variable?: string;
     labels?: string[];
     properties?: Record<string, unknown>;
-  }): MatchChainQuery {
+  }): { startNode: { variable: string; labels?: string[]; properties?: Record<string, unknown> }; hops: MatchChainQuery['hops'] } {
     const startVar = start.variable ?? this.genAnonVar();
     const startNode = {
       variable: startVar,
@@ -842,6 +842,15 @@ class Parser {
       });
       current = { variable: nodeVar, labels: next.labels, properties: next.properties };
     }
+    return { startNode, hops };
+  }
+
+  private parseMatchChain(start: {
+    variable?: string;
+    labels?: string[];
+    properties?: Record<string, unknown>;
+  }): MatchChainQuery {
+    const { startNode, hops } = this.parseChainPattern(start);
     const ret = this.parseReturnClause();
     if (!ret.items.length) throw new Error('Parse error: RETURN required');
     return {
@@ -902,16 +911,49 @@ class Parser {
     if (this.current()?.value === '-' || this.current()?.value === '<') {
       const save = this.pos;
       try {
-        const chain = this.parseMatchChain(start);
-        const hasAnonRel = chain.hops.some(h => !h.rel.variable);
-        const isRelReturn =
-          chain.hops.length === 1 &&
-          chain.returnItems.length === 1 &&
-          chain.returnItems[0].expression.type === 'Variable' &&
-          chain.hops[0].rel.variable === chain.returnItems[0].expression.name;
-        if (!isRelReturn || chain.hops.length > 1 || hasAnonRel) return chain;
-        // single-hop chains returning only the relationship variable are treated as simple patterns
-        this.pos = save;
+        const { startNode, hops } = this.parseChainPattern(start);
+        const hasAnonRel = hops.some(h => !h.rel.variable);
+        const nextTok = this.current();
+        if (nextTok?.value === 'RETURN') {
+          const ret = this.parseReturnClause();
+          if (
+            hops.length === 1 &&
+            ret.items.length === 1 &&
+            ret.items[0].expression.type === 'Variable' &&
+            hops[0].rel.variable === ret.items[0].expression.name &&
+            !hasAnonRel
+          ) {
+            // treat as simple pattern
+            this.pos = save;
+          } else {
+            return {
+              type: 'MatchChain',
+              start: startNode,
+              hops,
+              returnItems: ret.items,
+              orderBy: ret.orderBy,
+              skip: ret.skip,
+              limit: ret.limit,
+              distinct: ret.distinct,
+            };
+          }
+        } else if (nextTok?.value === 'WITH') {
+          const withClause = this.parseWithClause();
+          const source: MatchChainQuery = {
+            type: 'MatchChain',
+            start: startNode,
+            hops,
+            returnItems: withClause.items,
+            orderBy: withClause.orderBy,
+            skip: withClause.skip,
+            limit: withClause.limit,
+            distinct: withClause.distinct,
+          };
+          const nextStmt = this.parse();
+          return { type: 'With', source, next: nextStmt };
+        } else {
+          this.pos = save;
+        }
       } catch {
         this.pos = save;
       }
