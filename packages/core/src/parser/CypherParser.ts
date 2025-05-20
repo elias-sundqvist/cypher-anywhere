@@ -9,6 +9,7 @@ export interface MatchReturnQuery {
   labels?: string[];
   properties?: Record<string, unknown>;
   isRelationship?: boolean;
+  optional?: boolean;
   where?: WhereClause;
   returnItems: ReturnItem[];
   orderBy?: Expression;
@@ -276,10 +277,10 @@ class Parser {
     if (!tok || tok.type !== 'keyword') {
       throw new Error('Expected query keyword');
     }
-    if (tok.value === 'MATCH') return this.parseMatch();
+    if (tok.value === 'MATCH') return this.parseMatch(false);
     if (tok.value === 'OPTIONAL') {
       this.consume('keyword', 'OPTIONAL');
-      return this.parseMatch();
+      return this.parseMatch(true);
     }
     if (tok.value === 'CREATE') return this.parseCreate();
     if (tok.value === 'MERGE') return this.parseMerge();
@@ -642,7 +643,7 @@ class Parser {
     };
   }
 
-  private parseMatch(): CypherAST {
+  private parseMatch(optional = false): CypherAST {
     this.consume('keyword', 'MATCH');
     if (
       this.current()?.type === 'identifier' &&
@@ -727,13 +728,14 @@ class Parser {
         labels: pattern.labels,
         properties: pattern.properties,
         isRelationship: pattern.isRel,
+        optional,
         where,
-      returnItems: ret.items,
-      orderBy: ret.orderBy,
-      orderDirection: ret.orderDirection,
-      skip: ret.skip,
-      limit: ret.limit,
-    };
+        returnItems: ret.items,
+        orderBy: ret.orderBy,
+        orderDirection: ret.orderDirection,
+        skip: ret.skip,
+        limit: ret.limit,
+      };
     }
     if (next.value === 'DELETE') {
       this.consume('keyword', 'DELETE');

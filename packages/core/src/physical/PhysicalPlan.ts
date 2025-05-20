@@ -16,7 +16,7 @@ function evalExpr(
       return expr.value;
     case 'Property': {
       const rec = vars.get(expr.variable) as NodeRecord | RelRecord | undefined;
-      if (!rec) throw new Error(`Unbound variable ${expr.variable}`);
+      if (!rec) return undefined;
       return rec.properties[expr.property];
     }
     case 'Variable':
@@ -337,9 +337,19 @@ export function logicalToPhysical(
         const start = plan.skip ?? 0;
         let end = rows.length;
         if (plan.limit !== undefined) end = Math.min(end, start + plan.limit);
-        for (let i = start; i < end; i++) {
-          vars.set(plan.variable, rows[i].record as any);
-          yield rows[i].row;
+        if (rows.length === 0 && plan.optional) {
+          vars.delete(plan.variable);
+          const row: Record<string, unknown> = {};
+          plan.returnItems.forEach((item, idx) => {
+            const val = evalExpr(item.expression, vars, params);
+            row[aliasFor(item, idx)] = val;
+          });
+          yield row;
+        } else {
+          for (let i = start; i < end; i++) {
+            vars.set(plan.variable, rows[i].record as any);
+            yield rows[i].row;
+          }
         }
         break;
       }
