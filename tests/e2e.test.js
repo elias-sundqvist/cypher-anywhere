@@ -687,3 +687,21 @@ runOnAdapters('arithmetic subtraction in RETURN', async engine => {
   for await (const row of engine.run(q)) out.push(row.diff);
   assert.deepStrictEqual(out, [99, 114]);
 });
+runOnAdapters('RETURN star returns all variables', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (n:Person {name:"Alice"}) RETURN *')) out.push(row);
+  assert.strictEqual(out.length, 1);
+  assert.ok(out[0].n);
+  assert.strictEqual(out[0].n.properties.name, 'Alice');
+});
+
+runOnAdapters('RETURN star with relationship chain', async engine => {
+  const q = 'MATCH (p:Person {name:"Alice"})-[r:ACTED_IN]->(m:Movie {title:"John Wick"}) RETURN *';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row);
+  assert.strictEqual(out.length, 1);
+  assert.ok(out[0].p && out[0].r && out[0].m);
+  assert.strictEqual(out[0].p.properties.name, 'Alice');
+  assert.strictEqual(out[0].m.properties.title, 'John Wick');
+  assert.strictEqual(out[0].r.type, 'ACTED_IN');
+});

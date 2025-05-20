@@ -40,6 +40,8 @@ function evalExpr(
     }
     case 'Nodes':
       return vars.get(expr.variable);
+    case 'All':
+      return Object.fromEntries(vars.entries());
     default:
       throw new Error('Unknown expression');
   }
@@ -227,9 +229,16 @@ export function logicalToPhysical(
           const row: Record<string, unknown> = {};
           const aliasVars = new Map(vars);
           plan.returnItems.forEach((item, idx) => {
-            const val = evalExpr(item.expression, vars, params);
-            row[aliasFor(item, idx)] = val;
-            if (item.alias) aliasVars.set(item.alias, val);
+            if (item.expression.type === 'All') {
+              for (const [k, v] of vars.entries()) {
+                row[k] = v;
+                aliasVars.set(k, v);
+              }
+            } else {
+              const val = evalExpr(item.expression, vars, params);
+              row[aliasFor(item, idx)] = val;
+              if (item.alias) aliasVars.set(item.alias, val);
+            }
           });
           const order = plan.orderBy
             ? plan.orderBy.map(o => evalExpr(o.expression, aliasVars, params))
@@ -670,9 +679,16 @@ export function logicalToPhysical(
             const row: Record<string, unknown> = {};
             const aliasVars = new Map(varsLocal);
             plan.returnItems.forEach((item, idx) => {
-              const val = evalExpr(item.expression, varsLocal, params);
-              row[aliasFor(item, idx)] = val;
-              if (item.alias) aliasVars.set(item.alias, val);
+              if (item.expression.type === 'All') {
+                for (const [k, v] of varsLocal.entries()) {
+                  row[k] = v;
+                  aliasVars.set(k, v);
+                }
+              } else {
+                const val = evalExpr(item.expression, varsLocal, params);
+                row[aliasFor(item, idx)] = val;
+                if (item.alias) aliasVars.set(item.alias, val);
+              }
             });
             const order = plan.orderBy
               ? plan.orderBy.map(o => evalExpr(o.expression, aliasVars, params))

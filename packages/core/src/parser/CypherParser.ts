@@ -56,7 +56,8 @@ export type Expression =
   | { type: 'Sum'; expression: Expression }
   | { type: 'Min'; expression: Expression }
   | { type: 'Max'; expression: Expression }
-  | { type: 'Avg'; expression: Expression };
+  | { type: 'Avg'; expression: Expression }
+  | { type: 'All' };
 
 export type WhereClause =
   | {
@@ -450,6 +451,10 @@ class Parser {
       this.consume('punct', ']');
       return { type: 'Literal', value: arr };
     }
+    if (tok.type === 'punct' && tok.value === '*') {
+      this.pos++;
+      return { type: 'All' };
+    }
     if (tok.type === 'parameter') {
       this.pos++;
       return { type: 'Parameter', name: tok.value };
@@ -706,9 +711,13 @@ class Parser {
       try {
         const chain = this.parseMatchChain(start);
         const hasAnonRel = chain.hops.some(h => !h.rel.variable);
-        if (chain.hops.length > 1 || chain.returnItems.length > 1 || hasAnonRel)
-          return chain;
-        // single-hop chains with one return item and explicit rel variable are treated as simple patterns
+        const isRelReturn =
+          chain.hops.length === 1 &&
+          chain.returnItems.length === 1 &&
+          chain.returnItems[0].expression.type === 'Variable' &&
+          chain.hops[0].rel.variable === chain.returnItems[0].expression.name;
+        if (!isRelReturn || chain.hops.length > 1 || hasAnonRel) return chain;
+        // single-hop chains returning only the relationship variable are treated as simple patterns
         this.pos = save;
       } catch {
         this.pos = save;
