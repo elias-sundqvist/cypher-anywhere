@@ -82,7 +82,8 @@ async function findPath(
   startId: number | string,
   endId: number | string,
   minHops = 1,
-  maxHops = Infinity
+  maxHops = Infinity,
+  direction: 'out' | 'in' | 'none' = 'out'
 ): Promise<NodeRecord[] | null> {
   if (!adapter.scanRelationships || !adapter.getNodeById) {
     throw new Error('Adapter does not support path finding');
@@ -106,11 +107,22 @@ async function findPath(
     }
     if (hops >= maxHops) continue;
     for (const rel of rels) {
-      if (rel.startNode === last) {
-        const key = `${rel.endNode}:${hops + 1}`;
-        if (!visited.has(key)) {
-          visited.add(key);
-          queue.push([...path, rel.endNode]);
+      if (direction === 'out' || direction === 'none') {
+        if (rel.startNode === last) {
+          const key = `${rel.endNode}:${hops + 1}`;
+          if (!visited.has(key)) {
+            visited.add(key);
+            queue.push([...path, rel.endNode]);
+          }
+        }
+      }
+      if (direction === 'in' || direction === 'none') {
+        if (rel.endNode === last) {
+          const key = `${rel.startNode}:${hops + 1}`;
+          if (!visited.has(key)) {
+            visited.add(key);
+            queue.push([...path, rel.startNode]);
+          }
         }
       }
     }
@@ -1169,7 +1181,8 @@ export function logicalToPhysical(
               s.id,
               e.id,
               plan.minHops ?? 1,
-              plan.maxHops ?? Infinity
+              plan.maxHops ?? Infinity,
+              plan.direction ?? 'out'
             );
             if (!path) continue;
             vars.set(plan.pathVariable, path);

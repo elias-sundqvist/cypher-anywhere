@@ -178,6 +178,7 @@ export interface MatchPathQuery {
   };
   minHops?: number;
   maxHops?: number;
+  direction?: 'out' | 'in' | 'none';
   returnItems?: ReturnItem[];
   orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
   skip?: Expression;
@@ -948,7 +949,14 @@ class Parser {
       const pathVariable = this.parseIdentifier();
       this.consume('punct', '=');
       const start = this.parseNodePattern();
-      this.consume('punct', '-');
+      let direction: 'out' | 'in' | 'none' = 'out';
+      if (this.current()?.value === '<') {
+        this.consume('punct', '<');
+        this.consume('punct', '-');
+        direction = 'in';
+      } else {
+        this.consume('punct', '-');
+      }
       this.consume('punct', '[');
       this.consume('punct', '*');
       let minHops: number | undefined;
@@ -967,7 +975,13 @@ class Parser {
       }
       this.consume('punct', ']');
       this.consume('punct', '-');
-      this.consume('punct', '>');
+      if (direction === 'out') {
+        if (this.optional('punct', '>')) {
+          direction = 'out';
+        } else {
+          direction = 'none';
+        }
+      }
       const end = this.parseNodePattern();
       let returnItems: ReturnItem[] | undefined;
       let orderBy;
@@ -989,6 +1003,7 @@ class Parser {
         end: { variable: end.variable, labels: end.labels, properties: end.properties },
         minHops,
         maxHops,
+        direction,
         returnItems,
         orderBy,
         skip,
