@@ -1490,14 +1490,13 @@ export function logicalToPhysical(
         for (const item of items) {
           vars.set(plan.variable, item);
           const val = evalExpr(plan.returnExpression, vars, params);
-          if (
-            plan.returnExpression.type === 'Variable' &&
+          const alias =
+            plan.returnAlias ??
+            (plan.returnExpression.type === 'Variable' &&
             plan.returnExpression.name === plan.variable
-          ) {
-            yield { [plan.variable]: val };
-          } else {
-            yield { value: val };
-          }
+              ? plan.variable
+              : 'value');
+          yield { [alias]: val };
         }
         break;
       }

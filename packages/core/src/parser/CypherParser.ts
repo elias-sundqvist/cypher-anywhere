@@ -197,6 +197,7 @@ export interface UnwindQuery {
   list: unknown[] | Expression;
   variable: string;
   returnExpression: Expression;
+  returnAlias?: string;
 }
 
 export interface UnionQuery {
@@ -1394,7 +1395,11 @@ class Parser {
     const variable = this.parseIdentifier();
     this.consume('keyword', 'RETURN');
     const returnExpression = this.parseValue();
-    return { type: 'Unwind', list, variable, returnExpression };
+    let returnAlias: string | undefined;
+    if (this.optional('keyword', 'AS')) {
+      returnAlias = this.parseIdentifier();
+    }
+    return { type: 'Unwind', list, variable, returnExpression, returnAlias };
   }
 
   private parseCall(): CallQuery {
