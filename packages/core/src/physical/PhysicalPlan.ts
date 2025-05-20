@@ -174,6 +174,7 @@ function hasAgg(expr: Expression): boolean {
     case 'Min':
     case 'Max':
     case 'Avg':
+    case 'Collect':
       return true;
     case 'Add':
     case 'Sub':
@@ -208,6 +209,13 @@ type AggState =
       count: number;
       values: Set<string>;
     }
+  | {
+      type: 'Collect';
+      distinct?: boolean;
+      expr: Expression;
+      values: unknown[];
+      seen: Set<string>;
+    }
   | { type: 'Add' | 'Sub'; left: AggState | null; right: AggState | null };
 
 function initAggState(expr: Expression): AggState | null {
@@ -220,6 +228,8 @@ function initAggState(expr: Expression): AggState | null {
       return { type: expr.type, distinct: expr.distinct, expr: expr.expression, sum: 0, min: undefined, max: undefined, values: new Set() };
     case 'Avg':
       return { type: 'Avg', distinct: expr.distinct, expr: expr.expression, sum: 0, count: 0, values: new Set() };
+    case 'Collect':
+      return { type: 'Collect', distinct: expr.distinct, expr: expr.expression, values: [], seen: new Set() };
     case 'Add':
     case 'Sub': {
       const left = initAggState(expr.left);
@@ -302,6 +312,16 @@ function updateAggState(
       }
       break;
     }
+    case 'Collect': {
+      const v = evalExpr(state.expr, vars, params);
+      if (state.distinct) {
+        const key = JSON.stringify(v);
+        if (state.seen.has(key)) break;
+        state.seen.add(key);
+      }
+      state.values.push(v);
+      break;
+    }
     case 'Add':
     case 'Sub':
       updateAggState((expr as any).left, state.left, vars, params);
@@ -337,6 +357,8 @@ function finalizeAgg(
       return state ? (state as any).max : undefined;
     case 'Avg':
       return state ? ((state as any).count ? (state as any).sum / (state as any).count : null) : null;
+    case 'Collect':
+      return state ? (state as any).values : [];
     default:
       return evalExpr(expr, vars, params);
   }

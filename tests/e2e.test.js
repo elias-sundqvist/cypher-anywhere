@@ -741,6 +741,14 @@ runOnAdapters('COUNT on relationship chain', async engine => {
   assert.deepStrictEqual(out, ['Alice:2', 'Bob:1']);
 });
 
+runOnAdapters('COLLECT aggregation returns list', async engine => {
+  const q = 'MATCH (p:Person) RETURN COLLECT(p.name) AS names';
+  let row;
+  for await (const r of engine.run(q)) row = r;
+  assert.ok(row);
+  assert.deepStrictEqual(row.names.sort(), ['Alice', 'Bob', 'Carol']);
+});
+
 runOnAdapters('UNION combines results', async engine => {
   const q =
     'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name ' +
