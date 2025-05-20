@@ -27,14 +27,20 @@ test('parse CREATE (n:Person {name:"Alice"}) RETURN n', () => {
   const ast = parse('CREATE (n:Person {name:"Alice"}) RETURN n');
   assert.strictEqual(ast.type, 'Create');
   assert.deepStrictEqual(ast.labels, ['Person']);
-  assert.strictEqual(ast.properties.name, 'Alice');
+  assert.deepStrictEqual(ast.properties.name, {
+    type: 'Literal',
+    value: 'Alice'
+  });
 });
 
 // Merge node without return
 test('parse MERGE (n {name:"Bob"})', () => {
   const ast = parse('MERGE (n {name:"Bob"})');
   assert.strictEqual(ast.type, 'Merge');
-  assert.strictEqual(ast.properties.name, 'Bob');
+  assert.deepStrictEqual(ast.properties.name, {
+    type: 'Literal',
+    value: 'Bob'
+  });
 });
 
 test('parse MERGE (a)-[r:REL]->(b) RETURN r', () => {
@@ -49,9 +55,15 @@ test('parse MERGE (a:Person {name:"A"})-[r:REL]->(b:Person {name:"B"}) RETURN r'
   const ast = parse('MERGE (a:Person {name:"A"})-[r:REL]->(b:Person {name:"B"}) RETURN r');
   assert.strictEqual(ast.type, 'MergeRel');
   assert.strictEqual(ast.start.labels[0], 'Person');
-  assert.strictEqual(ast.start.properties.name, 'A');
+  assert.deepStrictEqual(ast.start.properties.name, {
+    type: 'Literal',
+    value: 'A'
+  });
   assert.strictEqual(ast.end.labels[0], 'Person');
-  assert.strictEqual(ast.end.properties.name, 'B');
+  assert.deepStrictEqual(ast.end.properties.name, {
+    type: 'Literal',
+    value: 'B'
+  });
 });
 
 test('parseMany splits semicolon separated statements', () => {

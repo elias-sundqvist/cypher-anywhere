@@ -478,7 +478,7 @@ class Parser {
       }
       const key = this.parseIdentifier();
       this.consume('punct', ':');
-      props[key] = this.parseLiteralValue();
+      props[key] = this.parseValue();
       first = false;
       if (this.current()?.value === '}') {
         break;
