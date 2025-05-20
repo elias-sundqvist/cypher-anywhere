@@ -529,6 +529,20 @@ runOnAdapters('RETURN multiple expressions with aliases', async engine => {
   assert.deepStrictEqual(out, ['The Matrix-1999', 'John Wick-2014']);
 });
 
+runOnAdapters('LIMIT with parameter', async engine => {
+  const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY name LIMIT $lim';
+  const out = [];
+  for await (const row of engine.run(q, { lim: 2 })) out.push(row.name);
+  assert.deepStrictEqual(out, ['Alice', 'Bob']);
+});
+
+runOnAdapters('SKIP with parameter', async engine => {
+  const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY name SKIP $s';
+  const out = [];
+  for await (const row of engine.run(q, { s: 1 })) out.push(row.name);
+  assert.deepStrictEqual(out, ['Bob', 'Carol']);
+});
+
 runOnAdapters('MATCH with parameter property', async engine => {
   const q = 'MATCH (n:Person {name:$name}) RETURN n';
   const out = [];
