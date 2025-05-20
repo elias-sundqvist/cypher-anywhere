@@ -676,6 +676,22 @@ runOnAdapters('single hop match without labels', async engine => {
   assert.deepStrictEqual(out.sort(), expected.sort());
 });
 
+runOnAdapters('single hop match returning only target node', async engine => {
+  const q = 'MATCH (a)-[r:ACTED_IN]->(b) RETURN b';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.b.properties.title);
+  const expected = ['The Matrix', 'John Wick', 'John Wick'];
+  assert.deepStrictEqual(out.sort(), expected.sort());
+});
+
+runOnAdapters('single hop match returning only source node', async engine => {
+  const q = 'MATCH (a)-[r:ACTED_IN]->(b) RETURN a';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.a.properties.name);
+  const expected = ['Alice', 'Alice', 'Bob'];
+  assert.deepStrictEqual(out.sort(), expected.sort());
+});
+
 runOnAdapters('single hop incoming match without labels', async engine => {
   const q = 'MATCH (b)<-[:ACTED_IN]-(a) RETURN a, b';
   const out = [];
