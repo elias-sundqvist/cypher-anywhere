@@ -940,7 +940,10 @@ export function logicalToPhysical(
           if (item.expression.type === 'Variable') return item.expression.name;
           return plan.returnItems.length === 1 ? 'value' : `value${idx}`;
         };
+        const hasAggItem: boolean[] = plan.returnItems.map(r => hasAgg(r.expression));
+        const hasAggFlag: boolean = hasAggItem.some(v => v);
         const rows: { row: Record<string, unknown>; order?: any }[] = [];
+        const groups = new Map<string, { row: Record<string, unknown>; aggs: (AggState | null)[] }>();
         const startNodes: NodeRecord[] = [];
         for await (const node of adapter.scanNodes(
           plan.start.labels ? { labels: plan.start.labels } : {}
@@ -962,24 +965,55 @@ export function logicalToPhysical(
           varsLocal: Map<string, any>
         ): Promise<void> => {
           if (hop >= plan.hops.length) {
-            const row: Record<string, unknown> = {};
             const aliasVars = new Map(varsLocal);
-            plan.returnItems.forEach((item, idx) => {
-              if (item.expression.type === 'All') {
-                for (const [k, v] of varsLocal.entries()) {
-                  row[k] = v;
-                  aliasVars.set(k, v);
+            if (hasAggFlag) {
+              const keyParts: unknown[] = [];
+              let group = null;
+              let i = 0;
+              for (let idx = 0; idx < plan.returnItems.length; idx++) {
+                const item = plan.returnItems[idx];
+                if (!hasAggItem[idx]) {
+                  const val = evalExpr(item.expression, aliasVars, params);
+                  keyParts.push(val);
                 }
-              } else {
-                const val = evalExpr(item.expression, varsLocal, params);
-                row[aliasFor(item, idx)] = val;
-                if (item.alias) aliasVars.set(item.alias, val);
               }
-            });
-            const order = plan.orderBy
-              ? plan.orderBy.map(o => evalExpr(o.expression, aliasVars, params))
-              : undefined;
-            rows.push({ row, order });
+              const key = JSON.stringify(keyParts);
+              group = groups.get(key);
+              if (!group) {
+                const row: Record<string, unknown> = {};
+                let j = 0;
+                plan.returnItems.forEach((item, idx) => {
+                  if (!hasAggItem[idx]) {
+                    const val = keyParts[j++];
+                    row[aliasFor(item, idx)] = val;
+                  }
+                });
+                group = { row, aggs: [] };
+                groups.set(key, group);
+              }
+              plan.returnItems.forEach((item, idx) => {
+                if (!hasAggItem[idx]) return;
+                const current = (group!.aggs[idx] = group!.aggs[idx] ?? initAggState(item.expression));
+                updateAggState(item.expression, current, aliasVars, params);
+              });
+            } else {
+              const row: Record<string, unknown> = {};
+              plan.returnItems.forEach((item, idx) => {
+                if (item.expression.type === 'All') {
+                  for (const [k, v] of aliasVars.entries()) {
+                    row[k] = v;
+                  }
+                } else {
+                  const val = evalExpr(item.expression, aliasVars, params);
+                  row[aliasFor(item, idx)] = val;
+                  if (item.alias) aliasVars.set(item.alias, val);
+                }
+              });
+              const order = plan.orderBy
+                ? plan.orderBy.map(o => evalExpr(o.expression, aliasVars, params))
+                : undefined;
+              rows.push({ row, order });
+            }
             return;
           }
           const step = plan.hops[hop];
@@ -1037,6 +1071,32 @@ export function logicalToPhysical(
           const varsStart = new Map(vars);
           varsStart.set(plan.start.variable, s);
           await traverse(s, 0, varsStart);
+        }
+
+        if (hasAggFlag) {
+          if (groups.size === 0 && hasAggItem.every(v => v)) {
+            groups.set('__empty__', { row: {}, aggs: [] });
+          }
+          for (const group of groups.values()) {
+            const aliasVars = new Map(vars);
+            plan.returnItems.forEach((item, idx) => {
+              const alias = aliasFor(item, idx);
+              if (hasAggItem[idx]) {
+                group.row[alias] = finalizeAgg(
+                  item.expression,
+                  group.aggs[idx],
+                  aliasVars,
+                  params
+                );
+              }
+              aliasVars.set(alias, group.row[alias]);
+              if (item.alias) aliasVars.set(item.alias, group.row[alias]);
+            });
+            const order = plan.orderBy
+              ? plan.orderBy.map(o => evalExpr(o.expression, aliasVars, params))
+              : undefined;
+            rows.push({ row: group.row, order });
+          }
         }
 
         if (plan.distinct) {
