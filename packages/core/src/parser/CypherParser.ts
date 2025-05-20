@@ -128,6 +128,18 @@ export interface UnwindQuery {
   returnExpression: Expression;
 }
 
+export interface UnionQuery {
+  type: 'Union';
+  left: CypherAST;
+  right: CypherAST;
+}
+
+export interface CallQuery {
+  type: 'Call';
+  subquery: CypherAST[];
+  returnItems: ReturnItem[];
+}
+
 export interface MatchChainQuery {
   type: 'MatchChain';
   start: {
@@ -162,7 +174,9 @@ export type CypherAST =
   | MatchPathQuery
   | MatchChainQuery
   | ForeachQuery
-  | UnwindQuery;
+  | UnwindQuery
+  | UnionQuery
+  | CallQuery;
 
 interface Token {
   type: 'keyword' | 'identifier' | 'number' | 'string' | 'punct' | 'parameter';
@@ -179,7 +193,7 @@ function tokenize(input: string): Token[] {
       i += ws[0].length;
       continue;
     }
-    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|AND|OR|NOT)\b/i.exec(rest);
+    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|CALL|UNION|AND|OR|NOT)\b/i.exec(rest);
     if (keyword) {
       tokens.push({ type: 'keyword', value: keyword[1].toUpperCase() });
       i += keyword[0].length;
@@ -246,7 +260,7 @@ class Parser {
     return null;
   }
 
-  parse(): CypherAST {
+  private parseSingle(): CypherAST {
     const tok = this.current();
     if (!tok || tok.type !== 'keyword') {
       throw new Error('Expected query keyword');
@@ -260,7 +274,19 @@ class Parser {
     if (tok.value === 'MERGE') return this.parseMerge();
     if (tok.value === 'FOREACH') return this.parseForeach();
     if (tok.value === 'UNWIND') return this.parseUnwind();
+    if (tok.value === 'CALL') return this.parseCall();
     throw new Error('Parse error: unsupported query');
+  }
+
+  parse(): CypherAST {
+    let left = this.parseSingle();
+    while (this.current()?.value === 'UNION') {
+      this.consume('keyword', 'UNION');
+      this.optional('keyword', 'ALL');
+      const right = this.parseSingle();
+      left = { type: 'Union', left, right };
+    }
+    return left;
   }
 
   private parseIdentifier(): string {
@@ -895,6 +921,25 @@ class Parser {
     this.consume('keyword', 'RETURN');
     const returnExpression = this.parseValue();
     return { type: 'Unwind', list, variable, returnExpression };
+  }
+
+  private parseCall(): CallQuery {
+    this.consume('keyword', 'CALL');
+    this.consume('punct', '{');
+    const start = this.pos;
+    let depth = 1;
+    while (depth > 0) {
+      const tok = this.current();
+      if (!tok) throw new Error('Unclosed CALL subquery');
+      this.pos++;
+      if (tok.type === 'punct' && tok.value === '{') depth++;
+      else if (tok.type === 'punct' && tok.value === '}') depth--;
+    }
+    const innerTokens = this.tokens.slice(start, this.pos - 1);
+    const innerQuery = innerTokens.map(t => t.value).join(' ');
+    const subquery = parseMany(innerQuery);
+    const ret = this.parseReturnClause();
+    return { type: 'Call', subquery, returnItems: ret.items };
   }
 }
 
