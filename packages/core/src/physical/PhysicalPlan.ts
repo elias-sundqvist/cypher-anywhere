@@ -592,9 +592,24 @@ export function logicalToPhysical(
           throw new Error('MergeRel requires bound start and end variables');
         let existing: RelRecord | null = null;
         for await (const rel of adapter.scanRelationships()) {
-          if (rel.type === plan.relType && rel.startNode === startNode.id && rel.endNode === endNode.id) {
-            existing = rel;
-            break;
+          if (
+            rel.type === plan.relType &&
+            rel.startNode === startNode.id &&
+            rel.endNode === endNode.id
+          ) {
+            let ok = true;
+            if (plan.relProperties) {
+              for (const [k, v] of Object.entries(plan.relProperties)) {
+                if (rel.properties[k] !== evalPropValue(v, vars, params)) {
+                  ok = false;
+                  break;
+                }
+              }
+            }
+            if (ok) {
+              existing = rel;
+              break;
+            }
           }
         }
         let created = false;
