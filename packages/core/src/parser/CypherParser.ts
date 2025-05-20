@@ -69,6 +69,7 @@ export type Expression =
   | { type: 'Min'; expression: Expression; distinct?: boolean }
   | { type: 'Max'; expression: Expression; distinct?: boolean }
   | { type: 'Avg'; expression: Expression; distinct?: boolean }
+  | { type: 'Collect'; expression: Expression; distinct?: boolean }
   | { type: 'All' };
 
 export type WhereClause =
@@ -529,7 +530,7 @@ class Parser {
         return { type: 'Literal', value: null };
       }
       const func = tok.value.toLowerCase();
-      if (['count', 'sum', 'min', 'max', 'avg'].includes(func)) {
+      if (['count', 'sum', 'min', 'max', 'avg', 'collect'].includes(func)) {
         this.pos++;
         this.consume('punct', '(');
         const distinct = this.optional('keyword', 'DISTINCT') !== null;
@@ -545,7 +546,8 @@ class Parser {
           | 'Sum'
           | 'Min'
           | 'Max'
-          | 'Avg';
+          | 'Avg'
+          | 'Collect';
         return { type, expression: expr, distinct } as Expression;
       }
       if (tok.value === 'nodes') {
