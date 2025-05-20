@@ -1111,6 +1111,13 @@ runOnAdapters('type() on relationship returns rel type', async engine => {
   assert.deepStrictEqual(out, ['ACTED_IN']);
 });
 
+runOnAdapters('labels() function returns node labels', async engine => {
+  const q = 'MATCH (n:Person {name:"Carol"}) RETURN labels(n) AS labs';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.labs);
+  assert.deepStrictEqual(out, [['Person', 'Actor']]);
+});
+
 runOnAdapters('WITH alias named id allowed', async engine => {
   const q = 'MATCH (n:Person {name:"Alice"}) WITH id(n) AS id RETURN id';
   const out = [];

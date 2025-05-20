@@ -66,6 +66,10 @@ function evalExpr(
       }
       return undefined;
     }
+    case 'Labels': {
+      const rec = vars.get(expr.variable) as NodeRecord | undefined;
+      return rec ? rec.labels : undefined;
+    }
     case 'Type': {
       const rec = vars.get(expr.variable) as RelRecord | undefined;
       return rec ? rec.type : undefined;
