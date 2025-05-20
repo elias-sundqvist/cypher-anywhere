@@ -300,10 +300,16 @@ export function logicalToPhysical(
         }
 
         if (hasAgg) {
+          if (
+            groups.size === 0 &&
+            plan.returnItems.every(item => isAgg(item.expression))
+          ) {
+            groups.set('__empty__', { row: {}, aggs: [] });
+          }
           for (const group of groups.values()) {
             plan.returnItems.forEach((item, idx) => {
               if (!isAgg(item.expression)) return;
-              const agg = group.aggs[idx];
+              const agg = group.aggs[idx] ?? { count: 0, sum: 0 };
               let val: any;
               switch (item.expression.type) {
                 case 'Count':
