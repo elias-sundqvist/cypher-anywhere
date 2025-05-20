@@ -837,16 +837,63 @@ export function logicalToPhysical(
           }
           if (ok) ends.push(node);
         }
+        const rows: { row: Record<string, unknown>; order?: any }[] = [];
         for (const s of starts) {
           for (const e of ends) {
             const path = await findPath(adapter, s.id, e.id);
-            if (path) {
-              vars.set(plan.pathVariable, path);
-              if (plan.returnVariable) {
-                yield { [plan.pathVariable]: path };
-              }
+            if (!path) continue;
+            vars.set(plan.pathVariable, path);
+            const local = new Map(vars);
+            if (plan.start.variable) local.set(plan.start.variable, s);
+            if (plan.end.variable) local.set(plan.end.variable, e);
+            if (!plan.returnItems) {
               return;
             }
+            const row: Record<string, unknown> = {};
+            const aliasVars = new Map(local);
+            plan.returnItems.forEach((item, idx) => {
+              const alias = item.alias || (item.expression.type === 'Variable' ? item.expression.name : plan.returnItems!.length === 1 ? 'value' : `value${idx}`);
+              const val = evalExpr(item.expression, aliasVars, params);
+              row[alias] = val;
+              if (item.alias) aliasVars.set(item.alias, val);
+            });
+            const order = plan.orderBy ? plan.orderBy.map(o => evalExpr(o.expression, aliasVars, params)) : undefined;
+            rows.push({ row, order });
+          }
+        }
+        if (plan.returnItems) {
+          if (plan.distinct) {
+            const seen = new Set<string>();
+            const uniq: typeof rows = [];
+            for (const r of rows) {
+              const key = JSON.stringify(r.row);
+              if (!seen.has(key)) {
+                seen.add(key);
+                uniq.push(r);
+              }
+            }
+            rows.splice(0, rows.length, ...uniq);
+          }
+          if (plan.orderBy) {
+            rows.sort((a, b) => {
+              for (let i = 0; i < plan.orderBy!.length; i++) {
+                const av = a.order ? a.order[i] : undefined;
+                const bv = b.order ? b.order[i] : undefined;
+                if (av === bv) continue;
+                if (av === undefined) return 1;
+                if (bv === undefined) return -1;
+                let cmp = av > bv ? 1 : -1;
+                if (plan.orderBy![i].direction === 'DESC') cmp = -cmp;
+                return cmp;
+              }
+              return 0;
+            });
+          }
+          const startIdx = plan.skip ? Number(evalExpr(plan.skip, vars, params)) : 0;
+          let endIdx = rows.length;
+          if (plan.limit !== undefined) endIdx = Math.min(endIdx, startIdx + Number(evalExpr(plan.limit, vars, params)));
+          for (let i = startIdx; i < endIdx; i++) {
+            yield rows[i].row;
           }
         }
         break;
