@@ -89,10 +89,12 @@ export interface CreateRelQuery {
   relType: string;
   relProperties?: Record<string, unknown>;
   start: {
+    variable: string;
     labels?: string[];
     properties?: Record<string, unknown>;
   };
   end: {
+    variable: string;
     labels?: string[];
     properties?: Record<string, unknown>;
   };
@@ -834,8 +836,8 @@ class Parser {
         relVariable: relVar,
         relType,
         relProperties: relProps,
-        start: { labels: start.labels, properties: start.properties },
-        end: { labels: end.labels, properties: end.properties },
+        start: { variable: start.variable, labels: start.labels, properties: start.properties },
+        end: { variable: end.variable, labels: end.labels, properties: end.properties },
         returnVariable: ret,
       };
     }
