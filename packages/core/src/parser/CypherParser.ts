@@ -589,7 +589,10 @@ class Parser {
         return { type: 'Literal', value: null };
       }
       const func = tok.value.toLowerCase();
-      if (['count', 'sum', 'min', 'max', 'avg', 'collect'].includes(func)) {
+      if (
+        ['count', 'sum', 'min', 'max', 'avg', 'collect'].includes(func) &&
+        this.lookahead()?.value === '('
+      ) {
         this.pos++;
         this.consume('punct', '(');
         const distinct = this.optional('keyword', 'DISTINCT') !== null;
@@ -609,21 +612,21 @@ class Parser {
           | 'Collect';
         return { type, expression: expr, distinct } as Expression;
       }
-      if (tok.value === 'nodes') {
+      if (tok.value === 'nodes' && this.lookahead()?.value === '(') {
         this.pos++;
         this.consume('punct', '(');
         const inner = this.parseIdentifier();
         this.consume('punct', ')');
         return { type: 'Nodes', variable: inner };
       }
-      if (tok.value === 'length') {
+      if (tok.value === 'length' && this.lookahead()?.value === '(') {
         this.pos++;
         this.consume('punct', '(');
         const inner = this.parseIdentifier();
         this.consume('punct', ')');
         return { type: 'Length', variable: inner };
       }
-      if (tok.value === 'id') {
+      if (tok.value === 'id' && this.lookahead()?.value === '(') {
         this.pos++;
         this.consume('punct', '(');
         const inner = this.parseIdentifier();
