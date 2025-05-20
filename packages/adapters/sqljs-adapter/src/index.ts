@@ -264,17 +264,28 @@ export class SqlJsAdapter implements StorageAdapter {
     if (
       matchAst.isRelationship ||
       (matchAst.labels && matchAst.labels.length > 1) ||
-      ast.orderBy ||
-      ast.skip ||
-      ast.limit ||
-      ast.optional
+      matchAst.optional
     )
       return null;
-    if (matchAst.returnItems.length !== 1) return null;
-    const ret = matchAst.returnItems[0];
-    if (ret.expression.type !== 'Variable') return null;
-    const alias = ret.alias || ret.expression.name;
-    if (matchAst.variable !== ret.expression.name) return null;
+    for (const ri of matchAst.returnItems) {
+      const expr = ri.expression;
+      if (expr.type === 'Variable') {
+        if (expr.name !== matchAst.variable) return null;
+      } else if (expr.type === 'Property') {
+        if (expr.variable !== matchAst.variable) return null;
+      } else {
+        return null;
+      }
+    }
+    const aliasMap = new Map<string, any>();
+    for (const ri of matchAst.returnItems) {
+      const name =
+        ri.alias ||
+        (ri.expression.type === 'Variable'
+          ? ri.expression.name
+          : (ri.expression as any).property);
+      aliasMap.set(name, ri.expression);
+    }
 
     let sql = 'SELECT id, labels, properties FROM nodes';
     const paramsArr: any[] = [];
@@ -395,11 +406,63 @@ export class SqlJsAdapter implements StorageAdapter {
       await self.ensureReady();
       const stmt = self.db.prepare(sql);
       stmt.bind(paramsArr);
+      const rows: { node: NodeRecord; data: Record<string, any> }[] = [];
       while (stmt.step()) {
-        const row = self.rowToNode(stmt.getAsObject());
-        yield { [alias]: row };
+        const node = self.rowToNode(stmt.getAsObject());
+        const data: Record<string, any> = {};
+        for (const [name, expr] of aliasMap.entries()) {
+          if (expr.type === 'Variable') {
+            data[name] = node;
+          } else if (expr.type === 'Property') {
+            data[name] = node.properties[expr.property];
+          }
+        }
+        rows.push({ node, data });
       }
       stmt.free();
+
+      if (matchAst.orderBy && matchAst.orderBy.length > 0) {
+        rows.sort((a, b) => {
+          for (const ob of matchAst.orderBy!) {
+            let aval: any;
+            let bval: any;
+            const expr =
+              ob.expression.type === 'Variable' && aliasMap.has(ob.expression.name)
+                ? aliasMap.get(ob.expression.name)
+                : ob.expression;
+            if (expr.type === 'Variable') {
+              aval = a.node;
+              bval = b.node;
+            } else if (expr.type === 'Property') {
+              aval = a.node.properties[expr.property];
+              bval = b.node.properties[expr.property];
+            } else {
+              aval = undefined;
+              bval = undefined;
+            }
+            if (aval < bval) return ob.direction === 'DESC' ? 1 : -1;
+            if (aval > bval) return ob.direction === 'DESC' ? -1 : 1;
+          }
+          return 0;
+        });
+      }
+
+      let start = 0;
+      if (matchAst.skip) {
+        const v = toValue(matchAst.skip);
+        start = typeof v === 'number' ? v : 0;
+      }
+      let end: number | undefined = undefined;
+      if (matchAst.limit) {
+        const v = toValue(matchAst.limit);
+        if (typeof v === 'number') {
+          end = start + v;
+        }
+      }
+      const slice = rows.slice(start, end);
+      for (const r of slice) {
+        yield r.data;
+      }
     }
     return gen();
   }

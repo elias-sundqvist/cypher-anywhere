@@ -834,56 +834,84 @@ runOnAdapters('OPTIONAL MATCH relationship chain missing returns null row', asyn
   assert.strictEqual(out[0].m, undefined);
 });
 
-runOnAdapters('ORDER BY with SKIP and LIMIT', async engine => {
+runOnAdapters('ORDER BY with SKIP and LIMIT', async (engine, adapter) => {
   const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY n.name SKIP 1 LIMIT 1';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.name);
+  for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Bob']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('ORDER BY DESC', async engine => {
+runOnAdapters('ORDER BY DESC', async (engine, adapter) => {
   const q = 'MATCH (m:Movie) RETURN m.released AS year ORDER BY year DESC';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.year);
+  for await (const row of result) out.push(row.year);
   assert.deepStrictEqual(out, [2014, 1999]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('ORDER BY multiple expressions', async engine => {
+runOnAdapters('ORDER BY multiple expressions', async (engine, adapter) => {
   for await (const _ of engine.run('CREATE (m:Movie {title:"Extra", released:2014})')) {}
   const q =
     'MATCH (m:Movie) RETURN m.released AS year, m.title AS title ORDER BY year DESC, title ASC';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(`${row.year}-${row.title}`);
+  for await (const row of result) out.push(`${row.year}-${row.title}`);
   assert.deepStrictEqual(out, ['2014-Extra', '2014-John Wick', '1999-The Matrix']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('RETURN multiple expressions with aliases', async engine => {
+runOnAdapters('RETURN multiple expressions with aliases', async (engine, adapter) => {
   const q = 'MATCH (m:Movie) RETURN m.title AS title, m.released AS year ORDER BY year';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(`${row.title}-${row.year}`);
+  for await (const row of result) out.push(`${row.title}-${row.year}`);
   assert.deepStrictEqual(out, ['The Matrix-1999', 'John Wick-2014']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('LIMIT with parameter', async engine => {
+runOnAdapters('LIMIT with parameter', async (engine, adapter) => {
   const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY name LIMIT $lim';
+  const result = engine.run(q, { lim: 2 });
   const out = [];
-  for await (const row of engine.run(q, { lim: 2 })) out.push(row.name);
+  for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Alice', 'Bob']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('SKIP with parameter', async engine => {
+runOnAdapters('SKIP with parameter', async (engine, adapter) => {
   const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY name SKIP $s';
+  const result = engine.run(q, { s: 1 });
   const out = [];
-  for await (const row of engine.run(q, { s: 1 })) out.push(row.name);
+  for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Bob', 'Carol']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('MATCH with parameter property', async engine => {
+runOnAdapters('MATCH with parameter property', async (engine, adapter) => {
   const q = 'MATCH (n:Person {name:$name}) RETURN n';
+  const result = engine.run(q, { name: 'Alice' });
   const out = [];
-  for await (const row of engine.run(q, { name: 'Alice' })) out.push(row.n);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('WHERE clause with parameter', async (engine, adapter) => {
