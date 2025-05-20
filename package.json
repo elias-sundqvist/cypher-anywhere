@@ -7,7 +7,7 @@
   ],
   "scripts": {
     "build": "npm run build:packages",
-    "build:packages": "tsc -b packages/core packages/adapters/json-adapter packages/adapters/sqljs-adapter",
+    "build:packages": "tsc -b packages/core packages/adapters/json-adapter packages/adapters/sqljs-adapter packages/adapters/sqljs-schema-adapter",
     "build:demo": "node build-demo.js",
     "test": "npm run build && node --test tests/*.js"
   },
