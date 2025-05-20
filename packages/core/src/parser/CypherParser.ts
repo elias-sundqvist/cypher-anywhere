@@ -1178,8 +1178,15 @@ class Parser {
       this.parseMaybeNodePattern();
       pattern = { variable: relVar, labels: relType ? [relType] : undefined, properties: relProps, isRel: true };
     } else {
-      if (!start.variable) throw new Error('Parse error: node variable required');
-      pattern = { variable: start.variable, labels: start.labels, properties: start.properties, isRel: false };
+      if (!start.variable) {
+        start.variable = this.genAnonVar();
+      }
+      pattern = {
+        variable: start.variable,
+        labels: start.labels,
+        properties: start.properties,
+        isRel: false,
+      };
     }
     let where: WhereClause | undefined;
     if (this.current()?.value === 'WHERE') {
