@@ -89,6 +89,7 @@ export type Expression =
   | { type: 'Avg'; expression: Expression; distinct?: boolean }
   | { type: 'Collect'; expression: Expression; distinct?: boolean }
   | { type: 'Length'; variable: string }
+  | { type: 'Type'; variable: string }
   | { type: 'All' };
 
 export type WhereClause =
@@ -630,6 +631,13 @@ class Parser {
         const inner = this.parseIdentifier();
         this.consume('punct', ')');
         return { type: 'Length', variable: inner };
+      }
+      if (tok.value === 'type' && this.lookahead()?.value === '(') {
+        this.pos++;
+        this.consume('punct', '(');
+        const inner = this.parseIdentifier();
+        this.consume('punct', ')');
+        return { type: 'Type', variable: inner };
       }
       if (tok.value === 'id' && this.lookahead()?.value === '(') {
         this.pos++;

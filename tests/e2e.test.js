@@ -1057,6 +1057,13 @@ runOnAdapters('id() on relationship returns rel id', async engine => {
   assert.deepStrictEqual(out, [7]);
 });
 
+runOnAdapters('type() on relationship returns rel type', async engine => {
+  const out = [];
+  const q = 'MATCH ()-[r:ACTED_IN {role:"Neo"}]->() RETURN type(r) AS type';
+  for await (const row of engine.run(q)) out.push(row.type);
+  assert.deepStrictEqual(out, ['ACTED_IN']);
+});
+
 runOnAdapters('WITH alias named id allowed', async engine => {
   const q = 'MATCH (n:Person {name:"Alice"}) WITH id(n) AS id RETURN id';
   const out = [];
