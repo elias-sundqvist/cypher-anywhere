@@ -239,6 +239,17 @@ runOnAdapters('create relationship and return nodes', async engine => {
   }
 });
 
+runOnAdapters('CREATE relationship between existing nodes', async (engine, adapter) => {
+  const script =
+    'MATCH (p:Person {name:"Alice"}) RETURN p; ' +
+    'MATCH (m:Movie {title:"John Wick"}) RETURN m; ' +
+    'CREATE (p)-[r:ACTED_IN]->(m) RETURN r';
+  let rel;
+  for await (const row of engine.run(script)) if (row.r) rel = row.r;
+  assert.strictEqual(rel.startNode, 1);
+  assert.strictEqual(rel.endNode, 4);
+});
+
 runOnAdapters('update node property multiple times', async engine => {
   const script = 'MATCH (n:Person {name:"Alice"}) SET n.age = 1 RETURN n; MATCH (n:Person {name:"Alice"}) SET n.age = 2 RETURN n';
   let last;
