@@ -453,13 +453,13 @@ class Parser {
       this.pos++;
       return { __param: tok.value };
     }
-    if (
-      tok.type === 'identifier' &&
-      (tok.value === 'true' || tok.value === 'false' || tok.value === 'null')
-    ) {
-      this.pos++;
-      if (tok.value === 'null') return null;
-      return tok.value === 'true';
+    if (tok.type === 'identifier') {
+      const lowered = tok.value.toLowerCase();
+      if (lowered === 'true' || lowered === 'false' || lowered === 'null') {
+        this.pos++;
+        if (lowered === 'null') return null;
+        return lowered === 'true';
+      }
     }
     throw new Error('Unexpected value');
   }
@@ -512,14 +512,11 @@ class Parser {
       return { type: 'Parameter', name: tok.value };
     }
     if (tok.type === 'identifier') {
-      if (tok.value === 'true' || tok.value === 'false' || tok.value === 'null') {
+      const lowered = tok.value.toLowerCase();
+      if (lowered === 'true' || lowered === 'false' || lowered === 'null') {
         this.pos++;
-        if (tok.value === 'null') return { type: 'Literal', value: null };
-        return { type: 'Literal', value: tok.value === 'true' };
-      }
-      if (tok.value === 'null') {
-        this.pos++;
-        return { type: 'Literal', value: null };
+        if (lowered === 'null') return { type: 'Literal', value: null };
+        return { type: 'Literal', value: lowered === 'true' };
       }
       const func = tok.value.toLowerCase();
       if (['count', 'sum', 'min', 'max', 'avg'].includes(func)) {

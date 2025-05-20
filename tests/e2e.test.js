@@ -912,3 +912,8 @@ runOnAdapters('NULL literal handled in create and match', async engine => {
     out.push(row.n);
   assert.strictEqual(out.length, 1);
 });
+runOnAdapters('boolean literals case insensitive', async engine => {
+  const out = [];
+  for await (const row of engine.run('RETURN TRUE AS t, FALSE AS f, NULL AS n')) out.push(row);
+  assert.deepStrictEqual(out, [{ t: true, f: false, n: null }]);
+});
