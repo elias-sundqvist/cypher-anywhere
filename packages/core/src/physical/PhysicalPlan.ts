@@ -1723,28 +1723,63 @@ export function logicalToPhysical(
       case 'Union': {
         const left = logicalToPhysical(plan.left, adapter);
         const right = logicalToPhysical(plan.right, adapter);
+        const rows: Record<string, unknown>[] = [];
         const seen = new Set<string>();
         for await (const row of left(new Map(vars), params)) {
           if (plan.all) {
-            yield row;
+            rows.push(row);
           } else {
             const key = JSON.stringify(row);
             if (!seen.has(key)) {
               seen.add(key);
-              yield row;
+              rows.push(row);
             }
           }
         }
         for await (const row of right(new Map(vars), params)) {
           if (plan.all) {
-            yield row;
+            rows.push(row);
           } else {
             const key = JSON.stringify(row);
             if (!seen.has(key)) {
               seen.add(key);
-              yield row;
+              rows.push(row);
             }
           }
+        }
+
+        if (plan.orderBy) {
+          rows.sort((a, b) => {
+            for (let i = 0; i < plan.orderBy!.length; i++) {
+              const av = evalExpr(
+                plan.orderBy![i].expression,
+                new Map(Object.entries(a)),
+                params
+              );
+              const bv = evalExpr(
+                plan.orderBy![i].expression,
+                new Map(Object.entries(b)),
+                params
+              );
+              if (av === bv) continue;
+              if (av === undefined) return 1;
+              if (bv === undefined) return -1;
+              let cmp = av > bv ? 1 : -1;
+              if (plan.orderBy![i].direction === 'DESC') cmp = -cmp;
+              return cmp;
+            }
+            return 0;
+          });
+        }
+
+        let start = 0;
+        if (plan.skip) start = Number(evalExpr(plan.skip, vars, params));
+        let end = rows.length;
+        if (plan.limit !== undefined) {
+          end = Math.min(end, start + Number(evalExpr(plan.limit, vars, params)));
+        }
+        for (let i = start; i < end; i++) {
+          yield rows[i];
         }
         break;
       }

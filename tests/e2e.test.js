@@ -990,6 +990,17 @@ runOnAdapters('UNION ALL preserves duplicate rows', async engine => {
   assert.deepStrictEqual(out, ['Alice', 'Alice']);
 });
 
+runOnAdapters('UNION with ORDER BY SKIP LIMIT', async engine => {
+  const q =
+    'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name ' +
+    'UNION ' +
+    'MATCH (p:Person {name:"Bob"}) RETURN p.name AS name ' +
+    'ORDER BY name DESC SKIP 1 LIMIT 1';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.name);
+  assert.deepStrictEqual(out, ['Alice']);
+});
+
 runOnAdapters('RETURN DISTINCT removes duplicates', async engine => {
   const q = 'MATCH (p:Person)-[:ACTED_IN]->(m:Movie) RETURN DISTINCT m.title AS title';
   const out = [];
