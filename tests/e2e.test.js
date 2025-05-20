@@ -1112,6 +1112,20 @@ runOnAdapters('arithmetic multiplication and division in RETURN', async engine =
   for await (const row of engine.run(q)) out.push(row.val);
   assert.deepStrictEqual(out, [((1999 - 1900) / 2) * 3, ((2014 - 1900) / 2) * 3]);
 });
+
+runOnAdapters('unary minus on property', async engine => {
+  const q = 'MATCH (m:Movie {title:"John Wick"}) RETURN -m.released AS neg';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.neg);
+  assert.deepStrictEqual(out, [-2014]);
+});
+
+runOnAdapters('unary minus on expression', async engine => {
+  const q = 'RETURN -(1 + 2) AS val';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.val);
+  assert.deepStrictEqual(out, [-3]);
+});
 runOnAdapters('RETURN star returns all variables', async engine => {
   const out = [];
   for await (const row of engine.run('MATCH (n:Person {name:"Alice"}) RETURN *')) out.push(row);

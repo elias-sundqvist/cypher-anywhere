@@ -80,6 +80,7 @@ export type Expression =
   | { type: 'Sub'; left: Expression; right: Expression }
   | { type: 'Mul'; left: Expression; right: Expression }
   | { type: 'Div'; left: Expression; right: Expression }
+  | { type: 'Neg'; expression: Expression }
   | { type: 'Nodes'; variable: string }
   | { type: 'Id'; variable: string }
   | { type: 'Count'; expression: Expression | null; distinct?: boolean }
@@ -574,6 +575,10 @@ class Parser {
     if (tok.type === 'number') {
       this.pos++;
       return { type: 'Literal', value: Number(tok.value) };
+    }
+    if (tok.type === 'punct' && tok.value === '-') {
+      this.pos++;
+      return { type: 'Neg', expression: this.parseValueAtom() };
     }
     if (tok.type === 'punct' && tok.value === '[') {
       this.pos++;
