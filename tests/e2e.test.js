@@ -623,3 +623,10 @@ runOnAdapters('negative numeric literals parsed correctly', async engine => {
   for await (const row of engine.run('MATCH (n:Neg) WHERE n.val < -1 RETURN n')) out.push(row.n);
   assert.strictEqual(out.length, 1);
 });
+
+runOnAdapters('RETURN DISTINCT removes duplicates', async engine => {
+  const q = 'MATCH (p:Person)-[:ACTED_IN]->(m) RETURN DISTINCT p';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.p.properties.name);
+  assert.deepStrictEqual(out.sort(), ['Alice', 'Bob']);
+});

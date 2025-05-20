@@ -326,6 +326,18 @@ export function logicalToPhysical(
           }
         }
 
+        if (plan.distinct) {
+          const seen = new Set<string>();
+          const uniq: typeof rows = [];
+          for (const r of rows) {
+            const key = JSON.stringify(r.row);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            uniq.push(r);
+          }
+          rows.splice(0, rows.length, ...uniq);
+        }
+
         if (plan.orderBy) {
           rows.sort((a, b) => {
             if (a.order === b.order) return 0;
@@ -701,6 +713,17 @@ export function logicalToPhysical(
           const varsStart = new Map(vars);
           varsStart.set(plan.start.variable, s);
           await traverse(s, 0, varsStart);
+        }
+        if (plan.distinct) {
+          const seen = new Set<string>();
+          const uniq: typeof rows = [];
+          for (const r of rows) {
+            const key = JSON.stringify(r.row);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            uniq.push(r);
+          }
+          rows.splice(0, rows.length, ...uniq);
         }
         if (plan.orderBy) {
           rows.sort((a, b) => {

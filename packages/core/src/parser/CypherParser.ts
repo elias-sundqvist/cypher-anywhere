@@ -12,6 +12,7 @@ export interface MatchReturnQuery {
   optional?: boolean;
   where?: WhereClause;
   returnItems: ReturnItem[];
+  distinct?: boolean;
   orderBy?: Expression;
   orderDirection?: 'ASC' | 'DESC';
   skip?: number;
@@ -146,6 +147,7 @@ export interface CallQuery {
   type: 'Call';
   subquery: CypherAST[];
   returnItems: ReturnItem[];
+  distinct?: boolean;
 }
 
 export interface MatchChainQuery {
@@ -169,6 +171,7 @@ export interface MatchChainQuery {
     };
   }[];
   returnItems: ReturnItem[];
+  distinct?: boolean;
   orderBy?: Expression;
   orderDirection?: 'ASC' | 'DESC';
   skip?: number;
@@ -205,7 +208,7 @@ function tokenize(input: string): Token[] {
       i += ws[0].length;
       continue;
     }
-    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|CALL|UNION|AND|OR|NOT|ASC|DESC)\b/i.exec(rest);
+    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|CALL|UNION|AND|OR|NOT|ASC|DESC|DISTINCT)\b/i.exec(rest);
     if (keyword) {
       tokens.push({ type: 'keyword', value: keyword[1].toUpperCase() });
       i += keyword[0].length;
@@ -499,12 +502,14 @@ class Parser {
 
   private parseReturnClause(): {
     items: ReturnItem[];
+    distinct: boolean;
     orderBy?: Expression;
     orderDirection?: 'ASC' | 'DESC';
     skip?: number;
     limit?: number;
   } {
     this.consume('keyword', 'RETURN');
+    const distinct = !!this.optional('keyword', 'DISTINCT');
     const items: ReturnItem[] = [];
     let idx = 0;
     while (true) {
@@ -538,7 +543,7 @@ class Parser {
       this.consume('keyword', 'LIMIT');
       limit = Number(this.consume('number').value);
     }
-    return { items, orderBy, orderDirection, skip, limit };
+    return { items, distinct, orderBy, orderDirection, skip, limit };
   }
 
   private parseWhereClause(): WhereClause {
@@ -638,6 +643,7 @@ class Parser {
       },
       hops,
       returnItems: ret.items,
+      distinct: ret.distinct,
       orderBy: ret.orderBy,
       orderDirection: ret.orderDirection,
       skip: ret.skip,
@@ -733,6 +739,7 @@ class Parser {
         optional,
         where,
         returnItems: ret.items,
+        distinct: ret.distinct,
         orderBy: ret.orderBy,
         orderDirection: ret.orderDirection,
         skip: ret.skip,
@@ -976,7 +983,7 @@ class Parser {
     const innerQuery = innerTokens.map(t => t.value).join(' ');
     const subquery = parseMany(innerQuery);
     const ret = this.parseReturnClause();
-    return { type: 'Call', subquery, returnItems: ret.items };
+    return { type: 'Call', subquery, returnItems: ret.items, distinct: ret.distinct };
   }
 }
 
