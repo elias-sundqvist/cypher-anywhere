@@ -56,7 +56,7 @@ export interface ReturnQuery {
 }
 
 export type Expression =
-  | { type: 'Literal'; value: string | number | boolean | unknown[] }
+  | { type: 'Literal'; value: string | number | boolean | unknown[] | null }
   | { type: 'Property'; variable: string; property: string }
   | { type: 'Variable'; name: string }
   | { type: 'Parameter'; name: string }
@@ -75,8 +75,17 @@ export type WhereClause =
   | {
       type: 'Condition';
       left: Expression;
-      operator: '=' | '>' | '>=' | '<' | '<=' | '<>' | 'IN';
-      right: Expression;
+      operator:
+        | '='
+        | '>'
+        | '>='
+        | '<'
+        | '<='
+        | '<>'
+        | 'IN'
+        | 'IS NULL'
+        | 'IS NOT NULL';
+      right?: Expression;
     }
   | { type: 'And'; left: WhereClause; right: WhereClause }
   | { type: 'Or'; left: WhereClause; right: WhereClause }
@@ -229,7 +238,7 @@ function tokenize(input: string): Token[] {
       i += ws[0].length;
       continue;
     }
-    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|CALL|UNION|ALL|AND|OR|NOT|ASC|DESC|DISTINCT)\b/i.exec(rest);
+    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|CALL|UNION|ALL|AND|OR|NOT|ASC|DESC|DISTINCT|IS)\b/i.exec(rest);
     if (keyword) {
       tokens.push({ type: 'keyword', value: keyword[1].toUpperCase() });
       i += keyword[0].length;
@@ -499,6 +508,10 @@ class Parser {
         this.pos++;
         return { type: 'Literal', value: tok.value === 'true' };
       }
+      if (tok.value === 'null') {
+        this.pos++;
+        return { type: 'Literal', value: null };
+      }
       const func = tok.value.toLowerCase();
       if (['count', 'sum', 'min', 'max', 'avg'].includes(func)) {
         this.pos++;
@@ -636,6 +649,23 @@ class Parser {
         this.consume('keyword', 'IN');
         const right = this.parseValue();
         return { type: 'Condition', left, operator: 'IN', right };
+      }
+      if (this.current()?.value === 'IS') {
+        this.consume('keyword', 'IS');
+        const not = this.optional('keyword', 'NOT') !== null;
+        if (
+          this.current() &&
+          this.current()!.type === 'identifier' &&
+          this.current()!.value.toLowerCase() === 'null'
+        ) {
+          this.consume('identifier');
+          return {
+            type: 'Condition',
+            left,
+            operator: not ? 'IS NOT NULL' : 'IS NULL',
+          };
+        }
+        throw new Error('Expected NULL');
       }
       const opTok = this.consume('punct');
       let op: '=' | '>' | '>=' | '<' | '<=' | '<>' = opTok.value as any;

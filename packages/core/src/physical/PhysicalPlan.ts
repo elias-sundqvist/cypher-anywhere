@@ -93,7 +93,7 @@ function evalWhere(
   switch (where.type) {
     case 'Condition': {
       const l = evalExpr(where.left, vars, params);
-      const r = evalExpr(where.right, vars, params);
+      const r = where.right !== undefined ? evalExpr(where.right, vars, params) : undefined;
       switch (where.operator) {
         case '=':
           return l === r;
@@ -109,6 +109,10 @@ function evalWhere(
           return l !== r;
         case 'IN':
           return Array.isArray(r) && r.includes(l);
+        case 'IS NULL':
+          return l === null || l === undefined;
+        case 'IS NOT NULL':
+          return l !== null && l !== undefined;
         default:
           throw new Error('Unknown operator');
       }
