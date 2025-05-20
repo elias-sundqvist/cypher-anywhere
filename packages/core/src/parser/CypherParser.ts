@@ -12,6 +12,7 @@ export interface MatchReturnQuery {
   where?: WhereClause;
   returnItems: ReturnItem[];
   orderBy?: Expression;
+  orderDirection?: 'ASC' | 'DESC';
   skip?: number;
   limit?: number;
 }
@@ -168,6 +169,7 @@ export interface MatchChainQuery {
   }[];
   returnItems: ReturnItem[];
   orderBy?: Expression;
+  orderDirection?: 'ASC' | 'DESC';
   skip?: number;
   limit?: number;
 }
@@ -202,7 +204,7 @@ function tokenize(input: string): Token[] {
       i += ws[0].length;
       continue;
     }
-    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|CALL|UNION|AND|OR|NOT)\b/i.exec(rest);
+    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|CALL|UNION|AND|OR|NOT|ASC|DESC)\b/i.exec(rest);
     if (keyword) {
       tokens.push({ type: 'keyword', value: keyword[1].toUpperCase() });
       i += keyword[0].length;
@@ -497,6 +499,7 @@ class Parser {
   private parseReturnClause(): {
     items: ReturnItem[];
     orderBy?: Expression;
+    orderDirection?: 'ASC' | 'DESC';
     skip?: number;
     limit?: number;
   } {
@@ -514,10 +517,15 @@ class Parser {
       if (!this.optional('punct', ',')) break;
     }
     let orderBy: Expression | undefined;
+    let orderDirection: 'ASC' | 'DESC' | undefined;
     if (this.current()?.value === 'ORDER') {
       this.consume('keyword', 'ORDER');
       this.consume('keyword', 'BY');
       orderBy = this.parseValue();
+      if (this.current()?.value === 'ASC' || this.current()?.value === 'DESC') {
+        orderDirection = this.current()!.value as 'ASC' | 'DESC';
+        this.consume('keyword');
+      }
     }
     let skip: number | undefined;
     if (this.current()?.value === 'SKIP') {
@@ -529,7 +537,7 @@ class Parser {
       this.consume('keyword', 'LIMIT');
       limit = Number(this.consume('number').value);
     }
-    return { items, orderBy, skip, limit };
+    return { items, orderBy, orderDirection, skip, limit };
   }
 
   private parseWhereClause(): WhereClause {
@@ -628,6 +636,7 @@ class Parser {
       hops,
       returnItems: ret.items,
       orderBy: ret.orderBy,
+      orderDirection: ret.orderDirection,
       skip: ret.skip,
       limit: ret.limit,
     };
@@ -719,11 +728,12 @@ class Parser {
         properties: pattern.properties,
         isRelationship: pattern.isRel,
         where,
-        returnItems: ret.items,
-        orderBy: ret.orderBy,
-        skip: ret.skip,
-        limit: ret.limit,
-      };
+      returnItems: ret.items,
+      orderBy: ret.orderBy,
+      orderDirection: ret.orderDirection,
+      skip: ret.skip,
+      limit: ret.limit,
+    };
     }
     if (next.value === 'DELETE') {
       this.consume('keyword', 'DELETE');
