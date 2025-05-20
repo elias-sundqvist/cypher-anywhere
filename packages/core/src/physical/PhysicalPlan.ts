@@ -191,29 +191,66 @@ export function logicalToPhysical(
           plan.returnItems.forEach((item, idx) => {
             if (!isAgg(item.expression)) return;
             const expr = item.expression;
-            const agg = (group!.aggs[idx] = group!.aggs[idx] ?? { count: 0, sum: 0 });
+            const agg =
+              (group!.aggs[idx] =
+                group!.aggs[idx] ?? { count: 0, sum: 0, values: new Set<any>() });
             switch (expr.type) {
               case 'Count':
-                agg.count++;
+                if (expr.distinct) {
+                  const val = expr.expression
+                    ? evalExpr(expr.expression, vars, params)
+                    : null;
+                  const key = JSON.stringify(val);
+                  if (!agg.values.has(key)) {
+                    agg.values.add(key);
+                    agg.count++;
+                  }
+                } else {
+                  agg.count++;
+                }
                 break;
               case 'Sum': {
                 const v = evalExpr(expr.expression, vars, params);
-                if (typeof v === 'number') agg.sum += v;
+                let include = true;
+                if (expr.distinct) {
+                  const key = JSON.stringify(v);
+                  if (agg.values.has(key)) include = false;
+                  else agg.values.add(key);
+                }
+                if (include && typeof v === 'number') agg.sum += v;
                 break;
               }
               case 'Min': {
                 const v = evalExpr(expr.expression, vars, params);
-                if (agg.min === undefined || v < agg.min) agg.min = v;
+                let include = true;
+                if (expr.distinct) {
+                  const key = JSON.stringify(v);
+                  if (agg.values.has(key)) include = false;
+                  else agg.values.add(key);
+                }
+                if (include && (agg.min === undefined || v < agg.min)) agg.min = v;
                 break;
               }
               case 'Max': {
                 const v = evalExpr(expr.expression, vars, params);
-                if (agg.max === undefined || v > agg.max) agg.max = v;
+                let include = true;
+                if (expr.distinct) {
+                  const key = JSON.stringify(v);
+                  if (agg.values.has(key)) include = false;
+                  else agg.values.add(key);
+                }
+                if (include && (agg.max === undefined || v > agg.max)) agg.max = v;
                 break;
               }
               case 'Avg': {
                 const v = evalExpr(expr.expression, vars, params);
-                if (typeof v === 'number') {
+                let include = true;
+                if (expr.distinct) {
+                  const key = JSON.stringify(v);
+                  if (agg.values.has(key)) include = false;
+                  else agg.values.add(key);
+                }
+                if (include && typeof v === 'number') {
                   agg.sum += v;
                   agg.count++;
                 }
@@ -318,7 +355,7 @@ export function logicalToPhysical(
           for (const group of groups.values()) {
             plan.returnItems.forEach((item, idx) => {
               if (!isAgg(item.expression)) return;
-              const agg = group.aggs[idx] ?? { count: 0, sum: 0 };
+              const agg = group.aggs[idx] ?? { count: 0, sum: 0, values: new Set<any>() };
               let val: any;
               switch (item.expression.type) {
                 case 'Count':
