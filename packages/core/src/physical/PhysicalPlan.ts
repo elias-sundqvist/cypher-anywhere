@@ -791,12 +791,29 @@ export function logicalToPhysical(
       }
       case 'Union': {
         const left = logicalToPhysical(plan.left, adapter);
-        for await (const row of left(new Map(vars), params)) {
-          yield row;
-        }
         const right = logicalToPhysical(plan.right, adapter);
+        const seen = new Set<string>();
+        for await (const row of left(new Map(vars), params)) {
+          if (plan.all) {
+            yield row;
+          } else {
+            const key = JSON.stringify(row);
+            if (!seen.has(key)) {
+              seen.add(key);
+              yield row;
+            }
+          }
+        }
         for await (const row of right(new Map(vars), params)) {
-          yield row;
+          if (plan.all) {
+            yield row;
+          } else {
+            const key = JSON.stringify(row);
+            if (!seen.has(key)) {
+              seen.add(key);
+              yield row;
+            }
+          }
         }
         break;
       }

@@ -139,6 +139,7 @@ export interface UnionQuery {
   type: 'Union';
   left: CypherAST;
   right: CypherAST;
+  all?: boolean;
 }
 
 export interface CallQuery {
@@ -203,7 +204,7 @@ function tokenize(input: string): Token[] {
       i += ws[0].length;
       continue;
     }
-    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|CALL|UNION|AND|OR|NOT|ASC|DESC)\b/i.exec(rest);
+    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|CALL|UNION|ALL|AND|OR|NOT|ASC|DESC)\b/i.exec(rest);
     if (keyword) {
       tokens.push({ type: 'keyword', value: keyword[1].toUpperCase() });
       i += keyword[0].length;
@@ -292,9 +293,9 @@ class Parser {
     let left = this.parseSingle();
     while (this.current()?.value === 'UNION') {
       this.consume('keyword', 'UNION');
-      this.optional('keyword', 'ALL');
+      const all = this.optional('keyword', 'ALL') !== null;
       const right = this.parseSingle();
-      left = { type: 'Union', left, right };
+      left = { type: 'Union', left, right, all };
     }
     return left;
   }
