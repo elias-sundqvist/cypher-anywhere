@@ -236,6 +236,7 @@ export interface MatchChainQuery {
       properties?: Record<string, unknown>;
     };
   }[];
+  pathVariable?: string;
   where?: WhereClause;
   returnItems: ReturnItem[];
   orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
@@ -958,72 +959,102 @@ class Parser {
       const pathVariable = this.parseIdentifier();
       this.consume('punct', '=');
       const start = this.parseNodePattern();
-      let direction: 'out' | 'in' | 'none' = 'out';
-      if (this.current()?.value === '<') {
-        this.consume('punct', '<');
-        this.consume('punct', '-');
-        direction = 'in';
-      } else {
-        this.consume('punct', '-');
-      }
-      this.consume('punct', '[');
-      let relType: string | undefined;
-      if (this.optional('punct', ':')) {
-        relType = this.parseIdentifier();
-      }
-      this.consume('punct', '*');
-      let minHops: number | undefined;
-      let maxHops: number | undefined;
-      if (this.current()?.type === 'number') {
-        minHops = Number(this.consume('number').value);
-      }
-      if (this.current()?.value === '.' && this.lookahead()?.value === '.') {
-        this.consume('punct', '.');
-        this.consume('punct', '.');
-        if (this.current()?.type === 'number') {
-          maxHops = Number(this.consume('number').value);
-        }
-      } else if (minHops !== undefined) {
-        maxHops = minHops;
-      }
-      this.consume('punct', ']');
-      this.consume('punct', '-');
-      if (direction === 'out') {
-        if (this.optional('punct', '>')) {
-          direction = 'out';
+      const save = this.pos;
+      try {
+        let direction: 'out' | 'in' | 'none' = 'out';
+        if (this.current()?.value === '<') {
+          this.consume('punct', '<');
+          this.consume('punct', '-');
+          direction = 'in';
         } else {
-          direction = 'none';
+          this.consume('punct', '-');
         }
+        this.consume('punct', '[');
+        let relType: string | undefined;
+        if (this.optional('punct', ':')) {
+          relType = this.parseIdentifier();
+        }
+        if (this.optional('punct', '*')) {
+          let minHops: number | undefined;
+          let maxHops: number | undefined;
+          if (this.current()?.type === 'number') {
+            minHops = Number(this.consume('number').value);
+          }
+          if (this.current()?.value === '.' && this.lookahead()?.value === '.') {
+            this.consume('punct', '.');
+            this.consume('punct', '.');
+            if (this.current()?.type === 'number') {
+              maxHops = Number(this.consume('number').value);
+            }
+          } else if (minHops !== undefined) {
+            maxHops = minHops;
+          }
+          this.consume('punct', ']');
+          this.consume('punct', '-');
+          if (direction === 'out') {
+            if (this.optional('punct', '>')) {
+              direction = 'out';
+            } else {
+              direction = 'none';
+            }
+          }
+          const end = this.parseNodePattern();
+          let returnItems: ReturnItem[] | undefined;
+          let orderBy;
+          let skip;
+          let limit;
+          let distinct;
+          if (this.current()?.value === 'RETURN') {
+            const ret = this.parseReturnClause();
+            returnItems = ret.items;
+            orderBy = ret.orderBy;
+            skip = ret.skip;
+            limit = ret.limit;
+            distinct = ret.distinct;
+          }
+          return {
+            type: 'MatchPath',
+            pathVariable,
+            start: { variable: start.variable, labels: start.labels, properties: start.properties },
+            end: { variable: end.variable, labels: end.labels, properties: end.properties },
+            relType,
+            minHops,
+            maxHops,
+            direction,
+            returnItems,
+            orderBy,
+            skip,
+            limit,
+            distinct,
+          };
+        } else {
+          this.pos = save;
+          const { startNode, hops } = this.parseChainPattern(start);
+          let where: WhereClause | undefined;
+          if (this.current()?.value === 'WHERE') {
+            this.consume('keyword', 'WHERE');
+            where = this.parseWhereClause();
+          }
+          const ret = this.parseReturnClause();
+          if (!ret.items.length) throw new Error('Parse error: RETURN required');
+          return {
+            type: 'MatchChain',
+            start: startNode,
+            hops,
+            pathVariable,
+            where,
+            returnItems: ret.items,
+            orderBy: ret.orderBy,
+            skip: ret.skip,
+            limit: ret.limit,
+            distinct: ret.distinct,
+            optional,
+          };
+        }
+      } catch (err) {
+        this.pos = save;
+        throw err;
       }
-      const end = this.parseNodePattern();
-      let returnItems: ReturnItem[] | undefined;
-      let orderBy;
-      let skip;
-      let limit;
-      let distinct;
-      if (this.current()?.value === 'RETURN') {
-        const ret = this.parseReturnClause();
-        returnItems = ret.items;
-        orderBy = ret.orderBy;
-        skip = ret.skip;
-        limit = ret.limit;
-        distinct = ret.distinct;
-      }
-      return {
-        type: 'MatchPath',
-        pathVariable,
-        start: { variable: start.variable, labels: start.labels, properties: start.properties },
-        end: { variable: end.variable, labels: end.labels, properties: end.properties },
-        relType,
-        minHops,
-        maxHops,
-        direction,
-        returnItems,
-        orderBy,
-        skip,
-        limit,
-        distinct,
-      };
     }
     let pattern: { variable: string; labels?: string[]; properties?: Record<string, unknown>; isRel?: boolean };
     const start = this.parseMaybeNodePattern();

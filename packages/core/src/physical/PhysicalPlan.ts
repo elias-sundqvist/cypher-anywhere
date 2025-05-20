@@ -1325,10 +1325,12 @@ export function logicalToPhysical(
         const traverse = async (
           node: NodeRecord,
           hop: number,
-          varsLocal: Map<string, any>
+          varsLocal: Map<string, any>,
+          path: NodeRecord[]
         ): Promise<void> => {
           if (hop >= plan.hops.length) {
             const aliasVars = new Map(varsLocal);
+            if (plan.pathVariable) aliasVars.set(plan.pathVariable, path);
             if (plan.where && !evalWhere(plan.where, aliasVars, params)) {
               return;
             }
@@ -1429,14 +1431,14 @@ export function logicalToPhysical(
               const varsNext = new Map(varsLocal);
               if (step.rel.variable) varsNext.set(step.rel.variable, rel);
               varsNext.set(step.node.variable, nextNode);
-              await traverse(nextNode, hop + 1, varsNext);
+              await traverse(nextNode, hop + 1, varsNext, [...path, nextNode]);
             }
           }
         };
         for (const s of startNodes) {
           const varsStart = new Map(vars);
           varsStart.set(plan.start.variable, s);
-          await traverse(s, 0, varsStart);
+          await traverse(s, 0, varsStart, [s]);
         }
 
         if (hasAggFlag) {
@@ -1504,6 +1506,7 @@ export function logicalToPhysical(
             if (h.rel.variable) local.delete(h.rel.variable);
             local.delete(h.node.variable);
           }
+          if (plan.pathVariable) local.delete(plan.pathVariable);
           const row: Record<string, unknown> = {};
           plan.returnItems.forEach((item, idx) => {
             if (hasAggItem[idx]) {
