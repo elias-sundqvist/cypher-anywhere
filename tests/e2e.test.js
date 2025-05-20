@@ -740,6 +740,14 @@ runOnAdapters('single hop match without labels', async engine => {
   assert.deepStrictEqual(out.sort(), expected.sort());
 });
 
+runOnAdapters('single hop match without start variable', async engine => {
+  const q = 'MATCH (:Person)-[:ACTED_IN]->(m:Movie) RETURN m';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.m.properties.title);
+  const expected = ['The Matrix', 'John Wick', 'John Wick'];
+  assert.deepStrictEqual(out.sort(), expected.sort());
+});
+
 runOnAdapters('single hop match returning only target node', async engine => {
   const q = 'MATCH (a)-[r:ACTED_IN]->(b) RETURN b';
   const out = [];
