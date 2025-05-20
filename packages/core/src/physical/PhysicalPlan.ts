@@ -1489,8 +1489,14 @@ export function logicalToPhysical(
         for await (const row of left(new Map(vars), params)) {
           const local = new Map(vars);
           plan.source.returnItems.forEach((item, idx) => {
-            const alias = aliasFor(item, idx);
-            local.set(alias, (row as any)[alias]);
+            if (item.expression.type === 'All') {
+              for (const [k, v] of Object.entries(row as any)) {
+                local.set(k, v);
+              }
+            } else {
+              const alias = aliasFor(item, idx);
+              local.set(alias, (row as any)[alias]);
+            }
           });
           if (plan.where && !evalWhere(plan.where, local, params)) {
             continue;
