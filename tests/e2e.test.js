@@ -486,6 +486,14 @@ runOnAdapters('variable length path can return end node', async engine => {
   assert.deepStrictEqual(out, ['Action']);
 });
 
+runOnAdapters('length() on path returns hop count', async engine => {
+  const q =
+    'MATCH p=(a:Person {name:"Alice"})-[*]->(g:Genre {name:"Action"}) RETURN length(p) AS len';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.len);
+  assert.deepStrictEqual(out, [2]);
+});
+
 runOnAdapters('multi-hop ->()-> chain returns final node', async engine => {
   const out = [];
   const q =

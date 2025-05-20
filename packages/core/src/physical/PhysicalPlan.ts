@@ -40,6 +40,16 @@ function evalExpr(
     }
     case 'Nodes':
       return vars.get(expr.variable);
+    case 'Length': {
+      const val = vars.get(expr.variable);
+      if (Array.isArray(val)) {
+        return val.length > 0 ? val.length - 1 : 0;
+      }
+      if (typeof val === 'string') {
+        return val.length;
+      }
+      return undefined;
+    }
     case 'Id': {
       const rec = vars.get(expr.variable) as NodeRecord | RelRecord | undefined;
       return rec ? rec.id : undefined;

@@ -86,6 +86,7 @@ export type Expression =
   | { type: 'Max'; expression: Expression; distinct?: boolean }
   | { type: 'Avg'; expression: Expression; distinct?: boolean }
   | { type: 'Collect'; expression: Expression; distinct?: boolean }
+  | { type: 'Length'; variable: string }
   | { type: 'All' };
 
 export type WhereClause =
@@ -584,6 +585,13 @@ class Parser {
         const inner = this.parseIdentifier();
         this.consume('punct', ')');
         return { type: 'Nodes', variable: inner };
+      }
+      if (tok.value === 'length') {
+        this.pos++;
+        this.consume('punct', '(');
+        const inner = this.parseIdentifier();
+        this.consume('punct', ')');
+        return { type: 'Length', variable: inner };
       }
       if (tok.value === 'id') {
         this.pos++;
