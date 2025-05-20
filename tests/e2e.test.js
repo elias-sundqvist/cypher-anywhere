@@ -1070,3 +1070,11 @@ runOnAdapters('WITH star passes through variables', async engine => {
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
 });
+
+runOnAdapters('WITH preserves variable across simple MATCH', async engine => {
+  const q = 'MATCH (p:Person {name:"Alice"}) WITH p MATCH (p) RETURN p';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.p);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Alice');
+});

@@ -496,24 +496,61 @@ export function logicalToPhysical(
         if (plan.isRelationship) {
           if (!adapter.scanRelationships)
             throw new Error('Adapter does not support MATCH');
-          for await (const rel of adapter.scanRelationships()) {
-            const label = plan.labels && plan.labels.length > 0 ? plan.labels[0] : undefined;
-            if (label && rel.type !== label) continue;
-            if (plan.properties) {
-              let ok = true;
+          const boundRel = vars.get(plan.variable) as RelRecord | undefined;
+          if (boundRel) {
+            let ok = true;
+            if (plan.labels && plan.labels.length > 0 && boundRel.type !== plan.labels[0]) {
+              ok = false;
+            }
+            if (ok && plan.properties) {
               for (const [k, v] of Object.entries(plan.properties)) {
-                if (rel.properties[k] !== evalPropValue(v, vars, params)) {
+                if (boundRel.properties[k] !== evalPropValue(v, vars, params)) {
                   ok = false;
                   break;
                 }
               }
-              if (!ok) continue;
             }
-            await collect(rel);
+            if (ok) await collect(boundRel);
+          } else {
+            for await (const rel of adapter.scanRelationships()) {
+              const label = plan.labels && plan.labels.length > 0 ? plan.labels[0] : undefined;
+              if (label && rel.type !== label) continue;
+              if (plan.properties) {
+                let ok = true;
+                for (const [k, v] of Object.entries(plan.properties)) {
+                  if (rel.properties[k] !== evalPropValue(v, vars, params)) {
+                    ok = false;
+                    break;
+                  }
+                }
+                if (!ok) continue;
+              }
+              await collect(rel);
+            }
           }
         } else {
           let usedIndex = false;
+          const boundNode = vars.get(plan.variable) as NodeRecord | undefined;
+          if (boundNode) {
+            let ok = true;
+            if (plan.labels && !plan.labels.every(l => boundNode.labels.includes(l))) {
+              ok = false;
+            }
+            if (ok && plan.properties) {
+              for (const [k, v] of Object.entries(plan.properties)) {
+                if (boundNode.properties[k] !== evalPropValue(v, vars, params)) {
+                  ok = false;
+                  break;
+                }
+              }
+            }
+            if (ok) {
+              await collect(boundNode);
+              usedIndex = true;
+            }
+          }
           if (
+            !boundNode &&
             plan.labels &&
             plan.labels.length > 0 &&
             plan.properties &&
@@ -1477,6 +1514,7 @@ export function logicalToPhysical(
             yield row;
           }
         }
+        vars.delete(plan.variable);
         break;
       }
       case 'Unwind': {
