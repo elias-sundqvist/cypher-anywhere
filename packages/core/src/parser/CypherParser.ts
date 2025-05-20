@@ -76,8 +76,7 @@ export interface MatchSetQuery {
   variable: string;
   labels?: string[];
   properties?: Record<string, unknown>;
-  property: string;
-  value: Expression;
+  updates: Record<string, Expression>;
   isRelationship?: boolean;
   returnVariable?: string;
   where?: WhereClause;
@@ -801,21 +800,27 @@ class Parser {
     }
     if (next.value === 'SET') {
       this.consume('keyword', 'SET');
-      const id = this.parseIdentifier();
-      if (id !== pattern.variable) throw new Error('Parse error: set variable mismatch');
-      this.consume('punct', '.');
-      const prop = this.parseIdentifier();
-      this.consume('punct', '=');
-      const value = this.parseValue();
+      const updates: Record<string, Expression> = {};
+      while (true) {
+        const id = this.parseIdentifier();
+        if (id !== pattern.variable)
+          throw new Error('Parse error: set variable mismatch');
+        this.consume('punct', '.');
+        const prop = this.parseIdentifier();
+        this.consume('punct', '=');
+        const value = this.parseValue();
+        updates[prop] = value;
+        if (!this.optional('punct', ',')) break;
+      }
       const ret = this.parseReturnVariable();
-      if (ret && ret !== pattern.variable) throw new Error('Parse error: return variable mismatch');
+      if (ret && ret !== pattern.variable)
+        throw new Error('Parse error: return variable mismatch');
       return {
         type: 'MatchSet',
         variable: pattern.variable,
         labels: pattern.labels,
         properties: pattern.properties,
-        property: prop,
-        value,
+        updates,
         isRelationship: pattern.isRel,
         returnVariable: ret,
         where,

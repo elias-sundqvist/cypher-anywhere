@@ -551,9 +551,13 @@ export function logicalToPhysical(
             }
             vars.set(plan.variable, rel);
             if (plan.where && !evalWhere(plan.where, vars, params)) continue;
-            const val = evalExpr(plan.value, vars, params);
-            await adapter.updateRelationshipProperties(rel.id, { [plan.property]: val });
-            rel.properties[plan.property] = val;
+            const updates: Record<string, any> = {};
+            for (const [prop, expr] of Object.entries(plan.updates)) {
+              const val = evalExpr(expr, vars, params);
+              updates[prop] = val;
+              rel.properties[prop] = val;
+            }
+            await adapter.updateRelationshipProperties(rel.id, updates);
             if (plan.returnVariable) {
               yield { [plan.variable]: rel };
             }
@@ -565,9 +569,13 @@ export function logicalToPhysical(
           if (bound && (!plan.labels || plan.labels.length === 0) && !plan.properties) {
             const node = bound;
             if (!plan.where || evalWhere(plan.where, vars, params)) {
-              const val = evalExpr(plan.value, vars, params);
-              await adapter.updateNodeProperties(node.id, { [plan.property]: val });
-              node.properties[plan.property] = val;
+              const updates: Record<string, any> = {};
+              for (const [prop, expr] of Object.entries(plan.updates)) {
+                const val = evalExpr(expr, vars, params);
+                updates[prop] = val;
+                node.properties[prop] = val;
+              }
+              await adapter.updateNodeProperties(node.id, updates);
               if (plan.returnVariable) {
                 yield { [plan.variable]: node };
               }
@@ -586,9 +594,13 @@ export function logicalToPhysical(
               if (!ok) continue;
               vars.set(plan.variable, node);
               if (plan.where && !evalWhere(plan.where, vars, params)) continue;
-              const val = evalExpr(plan.value, vars, params);
-              await adapter.updateNodeProperties(node.id, { [plan.property]: val });
-              node.properties[plan.property] = val;
+              const updates: Record<string, any> = {};
+              for (const [prop, expr] of Object.entries(plan.updates)) {
+                const val = evalExpr(expr, vars, params);
+                updates[prop] = val;
+                node.properties[prop] = val;
+              }
+              await adapter.updateNodeProperties(node.id, updates);
               if (plan.returnVariable) {
                 yield { [plan.variable]: node };
               }
