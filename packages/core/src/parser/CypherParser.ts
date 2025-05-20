@@ -78,6 +78,8 @@ export type Expression =
   | { type: 'Parameter'; name: string }
   | { type: 'Add'; left: Expression; right: Expression }
   | { type: 'Sub'; left: Expression; right: Expression }
+  | { type: 'Mul'; left: Expression; right: Expression }
+  | { type: 'Div'; left: Expression; right: Expression }
   | { type: 'Nodes'; variable: string }
   | { type: 'Id'; variable: string }
   | { type: 'Count'; expression: Expression | null; distinct?: boolean }
@@ -307,7 +309,7 @@ function tokenize(input: string): Token[] {
       i += param[0].length;
       continue;
     }
-    const punct = /^[(){}:,.;\[\]=>+\-*<]/.exec(rest);
+    const punct = /^[(){}:,.;\[\]=>+\-*<\/]/.exec(rest);
     if (punct) {
       tokens.push({ type: 'punct', value: punct[0] });
       i += punct[0].length;
@@ -517,13 +519,25 @@ class Parser {
   }
 
   private parseValue(): Expression {
-    let left = this.parseValueAtom();
+    let left = this.parseTerm();
     while (this.current()?.value === '+' || this.current()?.value === '-') {
       const op = this.current()!.value;
       this.consume('punct', op);
-      const right = this.parseValueAtom();
+      const right = this.parseTerm();
       if (op === '+') left = { type: 'Add', left, right };
       else left = { type: 'Sub', left, right };
+    }
+    return left;
+  }
+
+  private parseTerm(): Expression {
+    let left = this.parseValueAtom();
+    while (this.current()?.value === '*' || this.current()?.value === '/') {
+      const op = this.current()!.value;
+      this.consume('punct', op);
+      const right = this.parseValueAtom();
+      if (op === '*') left = { type: 'Mul', left, right };
+      else left = { type: 'Div', left, right };
     }
     return left;
   }
