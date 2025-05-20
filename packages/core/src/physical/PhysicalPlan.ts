@@ -213,10 +213,13 @@ export function logicalToPhysical(
           vars.set(plan.variable, rec);
           if (plan.where && !evalWhere(plan.where, vars, params)) return;
           const row: Record<string, unknown> = {};
+          const aliasVars = new Map(vars);
           plan.returnItems.forEach((item, idx) => {
-            row[aliasFor(item, idx)] = evalExpr(item.expression, vars, params);
+            const val = evalExpr(item.expression, vars, params);
+            row[aliasFor(item, idx)] = val;
+            if (item.alias) aliasVars.set(item.alias, val);
           });
-          const order = plan.orderBy ? evalExpr(plan.orderBy, vars, params) : undefined;
+          const order = plan.orderBy ? evalExpr(plan.orderBy, aliasVars, params) : undefined;
           rows.push({ row, order, record: rec });
         };
 
@@ -316,7 +319,8 @@ export function logicalToPhysical(
             if (a.order === b.order) return 0;
             if (a.order === undefined) return 1;
             if (b.order === undefined) return -1;
-            return a.order > b.order ? 1 : -1;
+            const cmp = a.order > b.order ? 1 : -1;
+            return plan.orderDirection === 'DESC' ? -cmp : cmp;
           });
         }
 
@@ -621,10 +625,13 @@ export function logicalToPhysical(
         ): Promise<void> => {
           if (hop >= plan.hops.length) {
             const row: Record<string, unknown> = {};
+            const aliasVars = new Map(varsLocal);
             plan.returnItems.forEach((item, idx) => {
-              row[aliasFor(item, idx)] = evalExpr(item.expression, varsLocal, params);
+              const val = evalExpr(item.expression, varsLocal, params);
+              row[aliasFor(item, idx)] = val;
+              if (item.alias) aliasVars.set(item.alias, val);
             });
-            const order = plan.orderBy ? evalExpr(plan.orderBy, varsLocal, params) : undefined;
+            const order = plan.orderBy ? evalExpr(plan.orderBy, aliasVars, params) : undefined;
             rows.push({ row, order });
             return;
           }
@@ -678,7 +685,8 @@ export function logicalToPhysical(
             if (a.order === b.order) return 0;
             if (a.order === undefined) return 1;
             if (b.order === undefined) return -1;
-            return a.order > b.order ? 1 : -1;
+            const cmp = a.order > b.order ? 1 : -1;
+            return plan.orderDirection === 'DESC' ? -cmp : cmp;
           });
         }
         const startIdx = plan.skip ?? 0;
