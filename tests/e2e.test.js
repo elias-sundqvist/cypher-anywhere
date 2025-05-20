@@ -1186,3 +1186,10 @@ runOnAdapters('alias used in subsequent pattern property', async engine => {
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
 });
+
+runOnAdapters('MATCH without variable returns count', async engine => {
+  const q = 'MATCH (:Person) RETURN COUNT(*) AS cnt';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.cnt);
+  assert.deepStrictEqual(out, [3]);
+});
