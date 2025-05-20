@@ -561,20 +561,36 @@ export function logicalToPhysical(
         break;
       }
       case 'CreateRel': {
-        if (!adapter.createNode || !adapter.createRelationship)
+        if (!adapter.createRelationship)
           throw new Error('Adapter does not support CREATE');
-        const start = await adapter.createNode(
-          plan.start.labels ?? [],
-          evalProps(plan.start.properties ?? {}, vars, params)
-        );
-        const end = await adapter.createNode(
-          plan.end.labels ?? [],
-          evalProps(plan.end.properties ?? {}, vars, params)
-        );
+        let startNode = (plan.start.variable
+          ? (vars.get(plan.start.variable) as NodeRecord | undefined)
+          : undefined);
+        if (!startNode) {
+          if (!adapter.createNode)
+            throw new Error('Adapter does not support CREATE');
+          startNode = await adapter.createNode(
+            plan.start.labels ?? [],
+            evalProps(plan.start.properties ?? {}, vars, params)
+          );
+          vars.set(plan.start.variable, startNode);
+        }
+        let endNode = (plan.end.variable
+          ? (vars.get(plan.end.variable) as NodeRecord | undefined)
+          : undefined);
+        if (!endNode) {
+          if (!adapter.createNode)
+            throw new Error('Adapter does not support CREATE');
+          endNode = await adapter.createNode(
+            plan.end.labels ?? [],
+            evalProps(plan.end.properties ?? {}, vars, params)
+          );
+          vars.set(plan.end.variable, endNode);
+        }
         const rel = await adapter.createRelationship(
           plan.relType,
-          start.id,
-          end.id,
+          startNode.id,
+          endNode.id,
           evalProps(plan.relProperties ?? {}, vars, params)
         );
         if (plan.returnVariable) {
