@@ -51,7 +51,15 @@ test('parseMany splits semicolon separated statements', () => {
   assert.strictEqual(q2.type, 'MatchReturn');
 });
 
-// Invalid query should throw
+test('parse top-level RETURN', () => {
+  const ast = parse('RETURN 1 AS one');
+  assert.strictEqual(ast.type, 'Return');
+  assert.deepStrictEqual(ast.returnItems, [
+    { expression: { type: 'Literal', value: 1 }, alias: 'one' }
+  ]);
+});
+
+// Invalid query should still throw
 test('parse unsupported query throws', () => {
-  assert.throws(() => parse('RETURN n'), /Parse error/);
+  assert.throws(() => parse('FOO'));
 });
