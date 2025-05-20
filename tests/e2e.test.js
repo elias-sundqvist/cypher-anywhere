@@ -354,6 +354,14 @@ runOnAdapters('match with WHERE IN list', async engine => {
   assert.deepStrictEqual(out.sort(), ['Alice', 'Bob']);
 });
 
+runOnAdapters('WHERE clause with parentheses', async engine => {
+  const q =
+    'MATCH (n:Person) WHERE (n.name = "Alice" OR n.name = "Bob") RETURN n';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.n.properties.name);
+  assert.deepStrictEqual(out.sort(), ['Alice', 'Bob']);
+});
+
 runOnAdapters('FOREACH create multiple nodes', async engine => {
   for await (const _ of engine.run('FOREACH x IN [1,2,3] CREATE (n:Batch)')) {}
   const out = [];
