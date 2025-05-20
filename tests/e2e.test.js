@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { JsonAdapter } = require('../packages/adapters/json-adapter/dist');
+const { SqlJsAdapter } = require('../packages/adapters/sqljs-adapter/dist');
 const { CypherEngine } = require('../packages/core/dist');
 
 const baseData = {
@@ -22,6 +23,13 @@ const baseData = {
 
 const adapterFactories = {
   json: () => new JsonAdapter({
+    dataset: JSON.parse(JSON.stringify(baseData)),
+    indexes: [
+      { label: 'Person', properties: ['name'], unique: true },
+      { label: 'Movie', properties: ['title'], unique: true }
+    ]
+  }),
+  sqljs: () => new SqlJsAdapter({
     dataset: JSON.parse(JSON.stringify(baseData)),
     indexes: [
       { label: 'Person', properties: ['name'], unique: true },

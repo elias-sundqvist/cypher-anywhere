@@ -12,7 +12,9 @@
       "@cypher-anywhere/core": ["packages/core/src"],
       "@cypher-anywhere/core/*": ["packages/core/src/*"],
       "@cypher-anywhere/json-adapter": ["packages/adapters/json-adapter/src"],
-      "@cypher-anywhere/json-adapter/*": ["packages/adapters/json-adapter/src/*"]
+      "@cypher-anywhere/json-adapter/*": ["packages/adapters/json-adapter/src/*"],
+      "@cypher-anywhere/sqljs-adapter": ["packages/adapters/sqljs-adapter/src"],
+      "@cypher-anywhere/sqljs-adapter/*": ["packages/adapters/sqljs-adapter/src/*"]
     }
   }
 }
