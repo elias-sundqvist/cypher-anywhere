@@ -645,6 +645,14 @@ runOnAdapters('SET property using parameter', async engine => {
   assert.strictEqual(node.properties.age, 55);
 });
 
+runOnAdapters('chain match with parameter property', async engine => {
+  const q = 'MATCH (p:Person {name:$name})-[:ACTED_IN]->(m:Movie) RETURN m';
+  const out = [];
+  for await (const row of engine.run(q, { name: 'Alice' }))
+    out.push(row.m.properties.title);
+  assert.deepStrictEqual(out.sort(), ['John Wick', 'The Matrix']);
+});
+
 runOnAdapters('COUNT aggregation', async engine => {
   const out = [];
   for await (const row of engine.run('MATCH (m:Movie) RETURN COUNT(m)')) out.push(row.value);
