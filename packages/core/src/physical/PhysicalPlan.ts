@@ -62,7 +62,7 @@ async function findPath(
   while (queue.length > 0) {
     const path = queue.shift()!;
     const last = path[path.length - 1];
-    if (last === endId) {
+    if (last === endId && path.length > 1) {
       const nodes: NodeRecord[] = [];
       for (const id of path) {
         const n = await adapter.getNodeById(id);

@@ -414,6 +414,15 @@ runOnAdapters('FOREACH over path nodes sets property', async engine => {
   assert.strictEqual(out.length, 3);
 });
 
+runOnAdapters('variable length path excludes zero length', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH p=(a)-[*]->(b) RETURN p')) out.push(row.p);
+  assert.ok(out.length > 0);
+  for (const p of out) {
+    assert.ok(Array.isArray(p) && p.length >= 2);
+  }
+});
+
 runOnAdapters('multi-hop ->()-> chain returns final node', async engine => {
   const out = [];
   const q =
