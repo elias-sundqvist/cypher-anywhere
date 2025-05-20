@@ -572,6 +572,18 @@ runOnAdapters('COUNT aggregation', async engine => {
   assert.strictEqual(out[0], 2);
 });
 
+runOnAdapters('COUNT on empty result returns 0', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (n:Missing) RETURN COUNT(n) AS cnt')) out.push(row.cnt);
+  assert.deepStrictEqual(out, [0]);
+});
+
+runOnAdapters('OPTIONAL MATCH with COUNT returns 0', async engine => {
+  const out = [];
+  for await (const row of engine.run('OPTIONAL MATCH (n:Missing) RETURN COUNT(n) AS cnt')) out.push(row.cnt);
+  assert.deepStrictEqual(out, [0]);
+});
+
 runOnAdapters('SUM aggregation', async engine => {
   const out = [];
   for await (const row of engine.run('MATCH (m:Movie) RETURN SUM(m.released)')) out.push(row.value);
