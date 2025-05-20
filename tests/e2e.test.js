@@ -388,11 +388,15 @@ runOnAdapters('set property on multiple nodes using expression', async engine =>
   }
 });
 
-runOnAdapters('match with WHERE filter', async engine => {
+runOnAdapters('match with WHERE filter', async (engine, adapter) => {
+  const result = engine.run('MATCH (n:Person) WHERE n.name = "Alice" RETURN n');
   const out = [];
-  for await (const row of engine.run('MATCH (n:Person) WHERE n.name = "Alice" RETURN n')) out.push(row.n);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('match with WHERE inequality', async engine => {
@@ -422,10 +426,14 @@ runOnAdapters('match all ACTED_IN relationships', async engine => {
   assert.strictEqual(out.length, 3);
 });
 
-runOnAdapters('match with WHERE using AND', async engine => {
+runOnAdapters('match with WHERE using AND', async (engine, adapter) => {
+  const result = engine.run('MATCH (n:Person) WHERE n.name = "Alice" AND n.name = "Bob" RETURN n');
   const out = [];
-  for await (const row of engine.run('MATCH (n:Person) WHERE n.name = "Alice" AND n.name = "Bob" RETURN n')) out.push(row.n);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 0);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('match with WHERE using OR', async engine => {

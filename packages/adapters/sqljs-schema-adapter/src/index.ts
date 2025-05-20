@@ -171,7 +171,6 @@ export class SqlJsSchemaAdapter implements StorageAdapter {
     if (
       matchAst.isRelationship ||
       (matchAst.labels && matchAst.labels.length > 1) ||
-      matchAst.where ||
       matchAst.orderBy ||
       matchAst.skip ||
       matchAst.limit ||
@@ -218,6 +217,34 @@ export class SqlJsSchemaAdapter implements StorageAdapter {
           }
           if (!ok) continue;
         }
+
+        function checkWhere(where: any): boolean {
+          if (!where) return true;
+          if (where.type === 'Condition') {
+            if (
+              where.operator === '=' &&
+              where.left.type === 'Property' &&
+              where.left.variable === matchAst.variable &&
+              where.right
+            ) {
+              const prop = where.left.property;
+              const val =
+                where.right.type === 'Literal'
+                  ? where.right.value
+                  : where.right.type === 'Parameter'
+                  ? params[where.right.name]
+                  : undefined;
+              return node.properties[prop] === val;
+            }
+            return false;
+          }
+          if (where.type === 'And') {
+            return checkWhere(where.left) && checkWhere(where.right);
+          }
+          return false;
+        }
+
+        if (!checkWhere(matchAst.where)) continue;
         yield { [alias]: node };
       }
       stmt.free();
