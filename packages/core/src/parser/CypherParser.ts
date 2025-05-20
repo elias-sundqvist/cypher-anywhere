@@ -53,6 +53,7 @@ export type Expression =
   | { type: 'Add'; left: Expression; right: Expression }
   | { type: 'Sub'; left: Expression; right: Expression }
   | { type: 'Nodes'; variable: string }
+  | { type: 'Id'; variable: string }
   | { type: 'Count'; expression: Expression | null; distinct?: boolean }
   | { type: 'Sum'; expression: Expression; distinct?: boolean }
   | { type: 'Min'; expression: Expression; distinct?: boolean }
@@ -500,6 +501,13 @@ class Parser {
         const inner = this.parseIdentifier();
         this.consume('punct', ')');
         return { type: 'Nodes', variable: inner };
+      }
+      if (tok.value === 'id') {
+        this.pos++;
+        this.consume('punct', '(');
+        const inner = this.parseIdentifier();
+        this.consume('punct', ')');
+        return { type: 'Id', variable: inner };
       }
       const variable = this.parseIdentifier();
       if (this.optional('punct', '.')) {
