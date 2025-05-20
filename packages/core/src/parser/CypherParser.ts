@@ -53,11 +53,11 @@ export type Expression =
   | { type: 'Add'; left: Expression; right: Expression }
   | { type: 'Sub'; left: Expression; right: Expression }
   | { type: 'Nodes'; variable: string }
-  | { type: 'Count'; expression: Expression | null }
-  | { type: 'Sum'; expression: Expression }
-  | { type: 'Min'; expression: Expression }
-  | { type: 'Max'; expression: Expression }
-  | { type: 'Avg'; expression: Expression }
+  | { type: 'Count'; expression: Expression | null; distinct?: boolean }
+  | { type: 'Sum'; expression: Expression; distinct?: boolean }
+  | { type: 'Min'; expression: Expression; distinct?: boolean }
+  | { type: 'Max'; expression: Expression; distinct?: boolean }
+  | { type: 'Avg'; expression: Expression; distinct?: boolean }
   | { type: 'All' };
 
 export type WhereClause =
@@ -473,6 +473,7 @@ class Parser {
       if (['count', 'sum', 'min', 'max', 'avg'].includes(func)) {
         this.pos++;
         this.consume('punct', '(');
+        const distinct = this.optional('keyword', 'DISTINCT') !== null;
         let expr: Expression | null = null;
         if (this.current()?.value === '*') {
           this.pos++;
@@ -486,7 +487,7 @@ class Parser {
           | 'Min'
           | 'Max'
           | 'Avg';
-        return { type, expression: expr } as Expression;
+        return { type, expression: expr, distinct } as Expression;
       }
       if (tok.value === 'nodes') {
         this.pos++;
