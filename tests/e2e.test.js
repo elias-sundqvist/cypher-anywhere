@@ -879,6 +879,13 @@ runOnAdapters('undirected single hop match', async engine => {
   assert.deepStrictEqual(out.sort(), expected.sort());
 });
 
+runOnAdapters('MATCH with multiple node patterns', async engine => {
+  const q = 'MATCH (p:Person), (m:Movie) RETURN p.name AS name, m.title AS title';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(`${row.name}-${row.title}`);
+  assert.strictEqual(out.length, 6);
+});
+
 runOnAdapters('negative numeric literals parsed correctly', async engine => {
   let node;
   for await (const row of engine.run('CREATE (n:Neg {val:-5}) RETURN n')) node = row.n;

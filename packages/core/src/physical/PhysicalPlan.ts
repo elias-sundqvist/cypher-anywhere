@@ -599,6 +599,172 @@ export function logicalToPhysical(
         }
         break;
       }
+      case 'MatchMultiReturn': {
+        const hasAggItem: boolean[] = plan.returnItems.map(r => hasAgg(r.expression));
+        const hasAggFlag: boolean = hasAggItem.some(v => v);
+        const rows: { row: Record<string, unknown>; order?: any }[] = [];
+        const aliasFor = (item: typeof plan.returnItems[number], idx: number): string => {
+          if (item.alias) return item.alias;
+          if (item.expression.type === 'Variable') return item.expression.name;
+          return plan.returnItems.length === 1 ? 'value' : `value${idx}`;
+        };
+        const groups = new Map<string, { row: Record<string, unknown>; aggs: (AggState | null)[] }>();
+
+        const traverse = async (idx: number, varsLocal: Map<string, any>): Promise<void> => {
+          if (idx >= plan.patterns.length) {
+            if (plan.where && !evalWhere(plan.where, varsLocal, params)) return;
+            const aliasVars = new Map(varsLocal);
+            if (hasAggFlag) {
+              const keyParts: unknown[] = [];
+              for (let i = 0; i < plan.returnItems.length; i++) {
+                if (!hasAggItem[i]) keyParts.push(evalExpr(plan.returnItems[i].expression, aliasVars, params));
+              }
+              const key = JSON.stringify(keyParts);
+              let group = groups.get(key);
+              if (!group) {
+                const row: Record<string, unknown> = {};
+                let j = 0;
+                plan.returnItems.forEach((item, idx2) => {
+                  if (!hasAggItem[idx2]) {
+                    row[aliasFor(item, idx2)] = keyParts[j++];
+                  }
+                });
+                group = { row, aggs: [] };
+                groups.set(key, group);
+              }
+              plan.returnItems.forEach((item, idx2) => {
+                if (!hasAggItem[idx2]) return;
+                const current = (group!.aggs[idx2] = group!.aggs[idx2] ?? initAggState(item.expression));
+                updateAggState(item.expression, current, aliasVars, params);
+              });
+            } else {
+              const row: Record<string, unknown> = {};
+              plan.returnItems.forEach((item, idx2) => {
+                if (item.expression.type === 'All') {
+                  for (const [k, v] of aliasVars.entries()) row[k] = v;
+                } else {
+                  const val = evalExpr(item.expression, aliasVars, params);
+                  row[aliasFor(item, idx2)] = val;
+                  if (item.alias) aliasVars.set(item.alias, val);
+                }
+              });
+              const order = plan.orderBy ? plan.orderBy.map(o => evalExpr(o.expression, aliasVars, params)) : undefined;
+              rows.push({ row, order });
+            }
+            return;
+          }
+
+          const pat = plan.patterns[idx];
+          let usedIndex = false;
+          if (
+            pat.labels &&
+            pat.labels.length > 0 &&
+            pat.properties &&
+            Object.keys(pat.properties).length === 1 &&
+            adapter.indexLookup &&
+            adapter.listIndexes
+          ) {
+            const [prop, valueExpr] = Object.entries(pat.properties)[0];
+            const value = evalPropValue(valueExpr, varsLocal, params);
+            const indexes = await adapter.listIndexes();
+            const label = pat.labels[0];
+            const found = indexes.find(i => i.label === label && i.properties.length === 1 && i.properties[0] === prop);
+            if (found) {
+              for await (const node of adapter.indexLookup(label, prop, value)) {
+                const nextVars = new Map(varsLocal);
+                nextVars.set(pat.variable, node);
+                await traverse(idx + 1, nextVars);
+              }
+              usedIndex = true;
+            }
+          }
+          if (!usedIndex) {
+            const scan = adapter.scanNodes!(pat.labels ? { labels: pat.labels } : {});
+            for await (const node of scan) {
+              if (pat.properties) {
+                let ok = true;
+                for (const [k, v] of Object.entries(pat.properties)) {
+                  if (node.properties[k] !== evalPropValue(v, varsLocal, params)) {
+                    ok = false;
+                    break;
+                  }
+                }
+                if (!ok) continue;
+              }
+              const nextVars = new Map(varsLocal);
+              nextVars.set(pat.variable, node);
+              await traverse(idx + 1, nextVars);
+            }
+          }
+        };
+
+        await traverse(0, new Map(vars));
+
+        if (hasAggFlag) {
+          if (groups.size === 0 && hasAggItem.every(v => v)) {
+            groups.set('__empty__', { row: {}, aggs: [] });
+          }
+          for (const [key, group] of groups) {
+            const aliasVars = new Map(vars);
+            plan.returnItems.forEach((item, idx2) => {
+              const alias = aliasFor(item, idx2);
+              aliasVars.set(alias, group.row[alias]);
+              if (item.alias) aliasVars.set(item.alias, group.row[alias]);
+            });
+            plan.returnItems.forEach((item, idx2) => {
+              if (!hasAggItem[idx2]) return;
+              group.row[aliasFor(item, idx2)] = finalizeAgg(
+                item.expression,
+                group.aggs[idx2],
+                aliasVars,
+                params
+              );
+            });
+            let order: any[] | undefined;
+            if (plan.orderBy) {
+              order = plan.orderBy.map(o => evalExpr(o.expression, aliasVars, params));
+            }
+            rows.push({ row: group.row, order });
+          }
+        }
+
+        if (plan.distinct) {
+          const seen = new Set<string>();
+          const unique: typeof rows = [];
+          for (const r of rows) {
+            const key = JSON.stringify(r.row);
+            if (!seen.has(key)) {
+              seen.add(key);
+              unique.push(r);
+            }
+          }
+          rows.splice(0, rows.length, ...unique);
+        }
+
+        if (plan.orderBy) {
+          rows.sort((a, b) => {
+            for (let i = 0; i < plan.orderBy!.length; i++) {
+              const av = a.order ? a.order[i] : undefined;
+              const bv = b.order ? b.order[i] : undefined;
+              if (av === bv) continue;
+              if (av === undefined) return 1;
+              if (bv === undefined) return -1;
+              let cmp = av > bv ? 1 : -1;
+              if (plan.orderBy![i].direction === 'DESC') cmp = -cmp;
+              return cmp;
+            }
+            return 0;
+          });
+        }
+
+        const startIdx = plan.skip ? Number(evalExpr(plan.skip, vars, params)) : 0;
+        let endIdx = rows.length;
+        if (plan.limit !== undefined) endIdx = Math.min(endIdx, startIdx + Number(evalExpr(plan.limit, vars, params)));
+        for (let i = startIdx; i < endIdx; i++) {
+          yield rows[i].row;
+        }
+        break;
+      }
       case 'Create': {
         if (!adapter.createNode) throw new Error('Adapter does not support CREATE');
         const node = await adapter.createNode(

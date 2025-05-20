@@ -18,6 +18,22 @@ export interface MatchReturnQuery {
   distinct?: boolean;
 }
 
+export interface MatchMultiReturnQuery {
+  type: 'MatchMultiReturn';
+  patterns: {
+    variable: string;
+    labels?: string[];
+    properties?: Record<string, unknown>;
+  }[];
+  optional?: boolean;
+  where?: WhereClause;
+  returnItems: ReturnItem[];
+  orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
+  skip?: Expression;
+  limit?: Expression;
+  distinct?: boolean;
+}
+
 export interface CreateQuery {
   type: 'Create';
   variable: string;
@@ -219,6 +235,7 @@ export interface WithQuery {
 
 export type CypherAST =
   | MatchReturnQuery
+  | MatchMultiReturnQuery
   | ReturnQuery
   | CreateQuery
   | MergeQuery
@@ -899,6 +916,36 @@ class Parser {
     }
     let pattern: { variable: string; labels?: string[]; properties?: Record<string, unknown>; isRel?: boolean };
     const start = this.parseMaybeNodePattern();
+    if (this.current()?.value === ',') {
+      if (!start.variable) throw new Error('Parse error: node variable required');
+      const patterns = [
+        { variable: start.variable, labels: start.labels, properties: start.properties }
+      ];
+      while (this.optional('punct', ',')) {
+        const next = this.parseNodePattern();
+        patterns.push({ variable: next.variable, labels: next.labels, properties: next.properties });
+      }
+      let where: WhereClause | undefined;
+      if (this.current()?.value === 'WHERE') {
+        this.consume('keyword', 'WHERE');
+        where = this.parseWhereClause();
+      }
+      const nextTok = this.current();
+      if (!nextTok || nextTok.type !== 'keyword') throw new Error('Expected keyword');
+      if (nextTok.value !== 'RETURN') throw new Error('Parse error: unsupported MATCH clause');
+      const ret = this.parseReturnClause();
+      return {
+        type: 'MatchMultiReturn',
+        patterns,
+        optional,
+        where,
+        returnItems: ret.items,
+        orderBy: ret.orderBy,
+        skip: ret.skip,
+        limit: ret.limit,
+        distinct: ret.distinct,
+      };
+    }
     if (this.current()?.value === '-' || this.current()?.value === '<') {
       const save = this.pos;
       try {
