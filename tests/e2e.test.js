@@ -1198,6 +1198,19 @@ runOnAdapters('alias used in subsequent pattern property', async engine => {
   assert.strictEqual(out[0].properties.name, 'Alice');
 });
 
+runOnAdapters('quoted identifiers for label, variable and property', async engine => {
+  let node;
+  for await (const row of engine.run('CREATE (`x-y`:`weird-label` {`first-name`:"Zoe"}) RETURN `x-y`'))
+    node = row['x-y'];
+  assert.ok(node);
+  assert.deepStrictEqual(node.labels, ['weird-label']);
+  assert.strictEqual(node.properties['first-name'], 'Zoe');
+  const out = [];
+  for await (const row of engine.run('MATCH (`x-y`:`weird-label` {`first-name`:"Zoe"}) RETURN `x-y`.`first-name` AS fn'))
+    out.push(row.fn);
+  assert.deepStrictEqual(out, ['Zoe']);
+});
+
 runOnAdapters('MATCH without variable returns count', async engine => {
   const q = 'MATCH (:Person) RETURN COUNT(*) AS cnt';
   const out = [];

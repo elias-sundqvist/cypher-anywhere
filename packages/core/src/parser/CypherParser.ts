@@ -297,6 +297,15 @@ function tokenize(input: string): Token[] {
       i += keyword[0].length;
       continue;
     }
+    const quoted = /^`([^`]|``)*`/.exec(rest);
+    if (quoted) {
+      tokens.push({
+        type: 'identifier',
+        value: quoted[0].slice(1, -1).replace(/``/g, '`'),
+      });
+      i += quoted[0].length;
+      continue;
+    }
     const ident = /^[_A-Za-z][_A-Za-z0-9]*/.exec(rest);
     if (ident) {
       tokens.push({ type: 'identifier', value: ident[0] });
