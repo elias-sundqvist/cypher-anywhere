@@ -449,9 +449,9 @@ function finalizeAgg(
     case 'Sum':
       return state ? (state as any).sum ?? 0 : 0;
     case 'Min':
-      return state ? (state as any).min : undefined;
+      return state ? (state as any).min ?? null : null;
     case 'Max':
-      return state ? (state as any).max : undefined;
+      return state ? (state as any).max ?? null : null;
     case 'Avg':
       return state ? ((state as any).count ? (state as any).sum / (state as any).count : null) : null;
     case 'Collect':
