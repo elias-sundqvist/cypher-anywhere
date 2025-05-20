@@ -471,10 +471,19 @@ runOnAdapters('UNWIND nodes from path', async engine => {
   assert.strictEqual(out.length, 3);
 });
 
-runOnAdapters('OPTIONAL MATCH missing returns zero rows', async engine => {
+runOnAdapters('OPTIONAL MATCH missing returns null row', async engine => {
   const out = [];
   for await (const row of engine.run('OPTIONAL MATCH (n:Missing) RETURN n')) out.push(row.n);
-  assert.strictEqual(out.length, 0);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0], undefined);
+});
+
+runOnAdapters('OPTIONAL MATCH existing node returns it', async engine => {
+  const out = [];
+  const q = 'OPTIONAL MATCH (n:Person {name:"Alice"}) RETURN n';
+  for await (const row of engine.run(q)) out.push(row.n);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Alice');
 });
 
 runOnAdapters('ORDER BY with SKIP and LIMIT', async engine => {
