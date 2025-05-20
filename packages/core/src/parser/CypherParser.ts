@@ -211,6 +211,9 @@ export interface UnionQuery {
   left: CypherAST;
   right: CypherAST;
   all?: boolean;
+  orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
+  skip?: Expression;
+  limit?: Expression;
 }
 
 export interface CallQuery {
@@ -417,6 +420,37 @@ class Parser {
       const all = this.optional('keyword', 'ALL') !== null;
       const right = this.parseSingle();
       left = { type: 'Union', left, right, all };
+    }
+    if (left.type === 'Union') {
+      let orderBy: { expression: Expression; direction?: 'ASC' | 'DESC' }[] | undefined;
+      if (this.current()?.value === 'ORDER') {
+        this.consume('keyword', 'ORDER');
+        this.consume('keyword', 'BY');
+        orderBy = [];
+        while (true) {
+          const expr = this.parseValue();
+          let direction: 'ASC' | 'DESC' | undefined;
+          if (this.current()?.value === 'ASC' || this.current()?.value === 'DESC') {
+            direction = this.current()!.value as 'ASC' | 'DESC';
+            this.consume('keyword');
+          }
+          orderBy.push({ expression: expr, direction });
+          if (!this.optional('punct', ',')) break;
+        }
+      }
+      let skip: Expression | undefined;
+      if (this.current()?.value === 'SKIP') {
+        this.consume('keyword', 'SKIP');
+        skip = this.parseValue();
+      }
+      let limit: Expression | undefined;
+      if (this.current()?.value === 'LIMIT') {
+        this.consume('keyword', 'LIMIT');
+        limit = this.parseValue();
+      }
+      if (orderBy || skip || limit) {
+        left = { ...left, orderBy, skip, limit } as UnionQuery;
+      }
     }
     return left;
   }
