@@ -15,6 +15,7 @@ export interface MatchReturnQuery {
   orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
   skip?: Expression;
   limit?: Expression;
+  distinct?: boolean;
 }
 
 export interface CreateQuery {
@@ -147,6 +148,7 @@ export interface CallQuery {
   type: 'Call';
   subquery: CypherAST[];
   returnItems: ReturnItem[];
+  distinct?: boolean;
 }
 
 export interface MatchChainQuery {
@@ -173,6 +175,7 @@ export interface MatchChainQuery {
   orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
   skip?: Expression;
   limit?: Expression;
+  distinct?: boolean;
 }
 
 export type CypherAST =
@@ -205,7 +208,7 @@ function tokenize(input: string): Token[] {
       i += ws[0].length;
       continue;
     }
-    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|CALL|UNION|ALL|AND|OR|NOT|ASC|DESC)\b/i.exec(rest);
+    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|CALL|UNION|ALL|AND|OR|NOT|ASC|DESC|DISTINCT)\b/i.exec(rest);
     if (keyword) {
       tokens.push({ type: 'keyword', value: keyword[1].toUpperCase() });
       i += keyword[0].length;
@@ -514,8 +517,10 @@ class Parser {
     orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
     skip?: Expression;
     limit?: Expression;
+    distinct?: boolean;
   } {
     this.consume('keyword', 'RETURN');
+    const distinct = this.optional('keyword', 'DISTINCT') !== null;
     const items: ReturnItem[] = [];
     let idx = 0;
     while (true) {
@@ -554,7 +559,7 @@ class Parser {
       this.consume('keyword', 'LIMIT');
       limit = this.parseValue();
     }
-    return { items, orderBy, skip, limit };
+    return { items, orderBy, skip, limit, distinct };
   }
 
   private parseWhereClause(): WhereClause {
@@ -666,6 +671,7 @@ class Parser {
       orderBy: ret.orderBy,
       skip: ret.skip,
       limit: ret.limit,
+      distinct: ret.distinct,
     };
   }
 
@@ -760,6 +766,7 @@ class Parser {
         orderBy: ret.orderBy,
         skip: ret.skip,
         limit: ret.limit,
+        distinct: ret.distinct,
       };
     }
     if (next.value === 'DELETE') {
@@ -999,7 +1006,7 @@ class Parser {
     const innerQuery = innerTokens.map(t => t.value).join(' ');
     const subquery = parseMany(innerQuery);
     const ret = this.parseReturnClause();
-    return { type: 'Call', subquery, returnItems: ret.items };
+    return { type: 'Call', subquery, returnItems: ret.items, distinct: ret.distinct };
   }
 }
 
