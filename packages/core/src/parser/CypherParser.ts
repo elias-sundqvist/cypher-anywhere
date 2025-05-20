@@ -307,7 +307,7 @@ function tokenize(input: string): Token[] {
       i += param[0].length;
       continue;
     }
-    const punct = /^[(){}:,\.\[\]=>+\-*<]/.exec(rest);
+    const punct = /^[(){}:,.;\[\]=>+\-*<]/.exec(rest);
     if (punct) {
       tokens.push({ type: 'punct', value: punct[0] });
       i += punct[0].length;
@@ -1400,9 +1400,16 @@ export function parse(query: string): CypherAST {
 }
 
 export function parseMany(query: string): CypherAST[] {
-  return query
-    .split(';')
-    .map(q => q.trim())
-    .filter(q => q.length > 0)
-    .map(q => parse(q));
+  const tokens = tokenize(query);
+  const parser = new Parser(tokens);
+  const out: CypherAST[] = [];
+  while ((parser as any).pos < tokens.length) {
+    const ast = parser.parse();
+    out.push(ast);
+    const next = (parser as any).tokens[(parser as any).pos];
+    if (next && next.type === 'punct' && next.value === ';') {
+      (parser as any).pos++;
+    }
+  }
+  return out;
 }

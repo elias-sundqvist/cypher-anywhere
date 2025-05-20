@@ -262,6 +262,26 @@ runOnAdapters('merge relationship without variable', async (engine, adapter) => 
   assert.strictEqual(likes[0].endNode, 3);
 });
 
+runOnAdapters(
+  'merge relationship separated by newline without semicolons',
+  async (engine, adapter) => {
+    const script =
+      'MERGE (p:Person {name:"Pelle"})\n' +
+      'MERGE (m:Movie {title:"The Matrix"})\n' +
+      'MERGE (p)-[:LIKES]->(m)';
+    for await (const _ of engine.run(script)) {}
+    const likes = [];
+    for await (const rel of adapter.scanRelationships()) {
+      if (rel.type === 'LIKES') likes.push(rel);
+    }
+    assert.strictEqual(likes.length, 1);
+    const pelle = await adapter.findNode(['Person'], { name: 'Pelle' });
+    assert.ok(pelle);
+    assert.strictEqual(likes[0].startNode, pelle.id);
+    assert.strictEqual(likes[0].endNode, 3);
+  }
+);
+
 runOnAdapters('merge relationship creates nodes from pattern', async (engine, adapter) => {
   const q = 'MERGE (p:Person {name:"Frank"})-[r:LIKES]->(g:Genre {name:"Action"}) RETURN r';
   let rel;
