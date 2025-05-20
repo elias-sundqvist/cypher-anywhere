@@ -605,6 +605,26 @@ runOnAdapters('UNION combines results', async engine => {
   assert.deepStrictEqual(out.sort(), ['Alice', 'Bob']);
 });
 
+runOnAdapters('UNION removes duplicate rows', async engine => {
+  const q =
+    'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name ' +
+    'UNION ' +
+    'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.name);
+  assert.deepStrictEqual(out, ['Alice']);
+});
+
+runOnAdapters('UNION ALL preserves duplicate rows', async engine => {
+  const q =
+    'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name ' +
+    'UNION ALL ' +
+    'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.name);
+  assert.deepStrictEqual(out, ['Alice', 'Alice']);
+});
+
 runOnAdapters('CALL subquery returns rows', async engine => {
   const q = 'CALL { MATCH (p:Person {name:"Alice"}) RETURN p } RETURN p';
   const out = [];
