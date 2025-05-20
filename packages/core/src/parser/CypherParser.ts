@@ -57,7 +57,12 @@ export type Expression =
   | { type: 'Avg'; expression: Expression };
 
 export type WhereClause =
-  | { type: 'Condition'; left: Expression; operator: '=' | '>' | '>='; right: Expression }
+  | {
+      type: 'Condition';
+      left: Expression;
+      operator: '=' | '>' | '>=' | '<' | '<=';
+      right: Expression;
+    }
   | { type: 'And'; left: WhereClause; right: WhereClause }
   | { type: 'Or'; left: WhereClause; right: WhereClause }
   | { type: 'Not'; clause: WhereClause };
@@ -535,9 +540,11 @@ class Parser {
       }
       const left = this.parseValue();
       const opTok = this.consume('punct');
-      let op: '=' | '>' | '>=' = opTok.value as any;
+      let op: '=' | '>' | '>=' | '<' | '<=' = opTok.value as any;
       if (opTok.value === '>' && this.optional('punct', '=')) {
         op = '>=';
+      } else if (opTok.value === '<' && this.optional('punct', '=')) {
+        op = '<=';
       }
       const right = this.parseValue();
       return { type: 'Condition', left, operator: op, right };

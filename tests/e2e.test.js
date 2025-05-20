@@ -303,6 +303,13 @@ runOnAdapters('match with WHERE inequality', async engine => {
   assert.strictEqual(out[0].properties.title, 'John Wick');
 });
 
+runOnAdapters('match with WHERE less than inequality', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (m:Movie) WHERE m.released < 2000 RETURN m')) out.push(row.m);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.title, 'The Matrix');
+});
+
 runOnAdapters('match relationship with WHERE', async engine => {
   const out = [];
   for await (const row of engine.run('MATCH ()-[r:ACTED_IN]->() WHERE r.role = "Neo" SET r.flag = true RETURN r')) out.push(row.r);
