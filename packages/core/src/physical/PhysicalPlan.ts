@@ -40,6 +40,10 @@ function evalExpr(
     }
     case 'Nodes':
       return vars.get(expr.variable);
+    case 'Id': {
+      const rec = vars.get(expr.variable) as NodeRecord | RelRecord | undefined;
+      return rec ? rec.id : undefined;
+    }
     case 'All':
       return Object.fromEntries(vars.entries());
     default:

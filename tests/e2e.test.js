@@ -788,3 +788,16 @@ runOnAdapters('RETURN star with relationship chain', async engine => {
   assert.strictEqual(out[0].m.properties.title, 'John Wick');
   assert.strictEqual(out[0].r.type, 'ACTED_IN');
 });
+runOnAdapters('id() function returns node id', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (n:Person {name:"Alice"}) RETURN id(n) AS id'))
+    out.push(row.id);
+  assert.deepStrictEqual(out, [1]);
+});
+
+runOnAdapters('id() on relationship returns rel id', async engine => {
+  const out = [];
+  const q = 'MATCH ()-[r:ACTED_IN {role:"Neo"}]->() RETURN id(r) AS id';
+  for await (const row of engine.run(q)) out.push(row.id);
+  assert.deepStrictEqual(out, [7]);
+});
