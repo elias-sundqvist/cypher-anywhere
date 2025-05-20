@@ -624,6 +624,20 @@ runOnAdapters('WHERE clause with parameter', async engine => {
   assert.strictEqual(out[0].properties.title, 'John Wick');
 });
 
+runOnAdapters('WHERE IS NULL matches missing property', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (n:Person) WHERE n.age IS NULL RETURN n')) out.push(row.n);
+  assert.strictEqual(out.length, 3);
+});
+
+runOnAdapters('WHERE IS NOT NULL matches existing property', async engine => {
+  for await (const _ of engine.run('MATCH (n:Person {name:"Bob"}) SET n.age = 30')) {}
+  const out = [];
+  for await (const row of engine.run('MATCH (n:Person) WHERE n.age IS NOT NULL RETURN n')) out.push(row.n);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Bob');
+});
+
 runOnAdapters('SET property using parameter', async engine => {
   const q = 'MATCH (n:Person {name:"Bob"}) SET n.age = $age RETURN n';
   let node;
