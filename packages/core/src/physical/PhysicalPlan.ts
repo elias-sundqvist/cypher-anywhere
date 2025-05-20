@@ -184,8 +184,13 @@ function evalPropValue(
   vars: Map<string, any>,
   params: Record<string, any>
 ): any {
-  if (val && typeof val === 'object' && '__param' in val) {
-    return params[(val as any).__param];
+  if (val && typeof val === 'object') {
+    if ('__param' in val) {
+      return params[(val as any).__param];
+    }
+    if ('type' in val) {
+      return evalExpr(val as Expression, vars, params);
+    }
   }
   return val;
 }
@@ -977,7 +982,7 @@ export function logicalToPhysical(
             if (plan.properties) {
               let ok = true;
               for (const [k, v] of Object.entries(plan.properties)) {
-                if (rel.properties[k] !== v) {
+                if (rel.properties[k] !== evalPropValue(v, vars, params)) {
                   ok = false;
                   break;
                 }

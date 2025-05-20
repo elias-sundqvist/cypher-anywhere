@@ -1108,3 +1108,12 @@ runOnAdapters('WITH preserves variable across simple MATCH', async engine => {
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
 });
+
+runOnAdapters('alias used in subsequent pattern property', async engine => {
+  const q =
+    'MATCH (p:Person {name:"Alice"}) WITH p.name AS nm MATCH (n:Person {name:nm}) RETURN n';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.n);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Alice');
+});
