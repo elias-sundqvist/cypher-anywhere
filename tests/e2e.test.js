@@ -982,3 +982,11 @@ runOnAdapters('WITH after relationship chain returns nodes', async engine => {
   for await (const row of engine.run(q)) out.push(row.title);
   assert.deepStrictEqual(out.sort(), ['John Wick', 'John Wick', 'The Matrix']);
 });
+runOnAdapters('match property with WITH variable', async engine => {
+  const q =
+    'MATCH (a:Person {name:"Alice"}) WITH a.name AS n MATCH (p:Person {name:n}) RETURN p';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.p);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Alice');
+});

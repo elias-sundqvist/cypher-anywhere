@@ -149,8 +149,13 @@ function evalPropValue(
   vars: Map<string, any>,
   params: Record<string, any>
 ): any {
-  if (val && typeof val === 'object' && '__param' in val) {
-    return params[(val as any).__param];
+  if (val && typeof val === 'object') {
+    if ('__param' in val) {
+      return params[(val as any).__param];
+    }
+    if ('type' in val) {
+      return evalExpr(val as Expression, vars, params);
+    }
   }
   return val;
 }
