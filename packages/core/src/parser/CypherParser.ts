@@ -238,7 +238,7 @@ export interface MatchChainQuery {
 
 export interface WithQuery {
   type: 'With';
-  source: MatchReturnQuery | MatchChainQuery;
+  source: MatchReturnQuery | MatchChainQuery | ReturnQuery;
   next: CypherAST;
 }
 
@@ -366,6 +366,19 @@ class Parser {
     if (tok.value === 'FOREACH') return this.parseForeach();
     if (tok.value === 'UNWIND') return this.parseUnwind();
     if (tok.value === 'CALL') return this.parseCall();
+    if (tok.value === 'WITH') {
+      const withClause = this.parseWithClause();
+      const source: ReturnQuery = {
+        type: 'Return',
+        returnItems: withClause.items,
+        orderBy: withClause.orderBy,
+        skip: withClause.skip,
+        limit: withClause.limit,
+        distinct: withClause.distinct,
+      };
+      const next = this.parse();
+      return { type: 'With', source, next };
+    }
     if (tok.value === 'RETURN') return this.parseReturnOnly();
     throw new Error('Parse error: unsupported query');
   }
