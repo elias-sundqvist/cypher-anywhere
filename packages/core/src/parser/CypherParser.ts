@@ -104,7 +104,7 @@ export interface MatchSetQuery {
 
 export interface CreateRelQuery {
   type: 'CreateRel';
-  relVariable: string;
+  relVariable?: string;
   relType: string;
   relProperties?: Record<string, unknown>;
   start: {
@@ -122,7 +122,7 @@ export interface CreateRelQuery {
 
 export interface MergeRelQuery {
   type: 'MergeRel';
-  relVariable: string;
+  relVariable?: string;
   relType: string;
   relProperties?: Record<string, unknown>;
   startVariable: string;
@@ -290,6 +290,10 @@ class Parser {
 
   private current(): Token | undefined {
     return this.tokens[this.pos];
+  }
+
+  private lookahead(n = 1): Token | undefined {
+    return this.tokens[this.pos + n];
   }
 
   private consume(type: Token['type'], value?: string): Token {
@@ -927,8 +931,14 @@ class Parser {
     if (this.current()?.value === '-') {
       this.consume('punct', '-');
       this.consume('punct', '[');
-      const relVar = this.parseIdentifier();
-      this.consume('punct', ':');
+      let relVar: string;
+      if (this.current()?.type === 'identifier' && this.lookahead()?.value === ':') {
+        relVar = this.parseIdentifier();
+        this.consume('punct', ':');
+      } else {
+        relVar = this.genAnonVar();
+        this.consume('punct', ':');
+      }
       const relType = this.parseIdentifier();
       let relProps: Record<string, unknown> | undefined;
       if (this.optional('punct', '{')) {
@@ -987,8 +997,14 @@ class Parser {
     if (this.current()?.value === '-') {
       this.consume('punct', '-');
       this.consume('punct', '[');
-      const relVar = this.parseIdentifier();
-      this.consume('punct', ':');
+      let relVar: string;
+      if (this.current()?.type === 'identifier' && this.lookahead()?.value === ':') {
+        relVar = this.parseIdentifier();
+        this.consume('punct', ':');
+      } else {
+        relVar = this.genAnonVar();
+        this.consume('punct', ':');
+      }
       const relType = this.parseIdentifier();
       let relProps: Record<string, unknown> | undefined;
       if (this.optional('punct', '{')) {

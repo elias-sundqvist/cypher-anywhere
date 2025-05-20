@@ -245,6 +245,23 @@ runOnAdapters('merge relationship respects properties', async (engine, adapter) 
   assert.deepStrictEqual(roles, ['Neo', 'Villain']);
 });
 
+runOnAdapters('merge relationship without variable', async (engine, adapter) => {
+  const script =
+    'MERGE (p:Person {name:"Pelle"}); ' +
+    'MERGE (m:Movie {title:"The Matrix"}); ' +
+    'MERGE (p)-[:LIKES]->(m)';
+  for await (const _ of engine.run(script)) {}
+  const likes = [];
+  for await (const rel of adapter.scanRelationships()) {
+    if (rel.type === 'LIKES') likes.push(rel);
+  }
+  assert.strictEqual(likes.length, 1);
+  const pelle = await adapter.findNode(['Person'], { name: 'Pelle' });
+  assert.ok(pelle);
+  assert.strictEqual(likes[0].startNode, pelle.id);
+  assert.strictEqual(likes[0].endNode, 3);
+});
+
 
 runOnAdapters('relationship deleted is gone', async engine => {
   for await (const _ of engine.run('MATCH ()-[r:ACTED_IN {role:"Buddy"}]->() DELETE r')) {}
