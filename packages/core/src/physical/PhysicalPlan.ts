@@ -1655,10 +1655,10 @@ export function logicalToPhysical(
         const outRows: Record<string, unknown>[] = [];
         for (let i = 0; i < innerPlans.length; i++) {
           const p = innerPlans[i];
-          let idx = 0;
-          for await (const _row of p(local, params)) {
-            idx++;
+          for await (const row of p(local, params)) {
             if (i === innerPlans.length - 1) {
+              const varsWithRow = new Map(local);
+              for (const [k, v] of Object.entries(row)) varsWithRow.set(k, v);
               const out: Record<string, unknown> = {};
               plan.returnItems.forEach((item, ridx) => {
                 const alias =
@@ -1668,7 +1668,7 @@ export function logicalToPhysical(
                     : plan.returnItems.length === 1
                     ? 'value'
                     : `value${ridx}`);
-                out[alias] = evalExpr(item.expression, local, params);
+                out[alias] = evalExpr(item.expression, varsWithRow, params);
               });
               outRows.push(out);
             }

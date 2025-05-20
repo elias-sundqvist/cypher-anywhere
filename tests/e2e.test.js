@@ -918,6 +918,13 @@ runOnAdapters('CALL subquery returns rows', async engine => {
   assert.strictEqual(out[0].properties.name, 'Alice');
 });
 
+runOnAdapters('CALL subquery propagates alias', async engine => {
+  const q = 'CALL { MATCH (p:Person) RETURN p.name AS name } RETURN name';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.name);
+  assert.deepStrictEqual(out.sort(), ['Alice', 'Bob', 'Carol']);
+});
+
 runOnAdapters('single hop match without rel variable', async engine => {
   const q = 'MATCH (p:Person)-[:ACTED_IN]->(m:Movie) RETURN p, m';
   const out = [];
