@@ -520,3 +520,21 @@ runOnAdapters('GROUP BY with COUNT', async engine => {
   assert.strictEqual(res[1999], 1);
   assert.strictEqual(res[2014], 1);
 });
+
+runOnAdapters('UNION combines results', async engine => {
+  const q =
+    'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name ' +
+    'UNION ' +
+    'MATCH (p:Person {name:"Bob"}) RETURN p.name AS name';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.name);
+  assert.deepStrictEqual(out.sort(), ['Alice', 'Bob']);
+});
+
+runOnAdapters('CALL subquery returns rows', async engine => {
+  const q = 'CALL { MATCH (p:Person {name:"Alice"}) RETURN p } RETURN p';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.p);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Alice');
+});
