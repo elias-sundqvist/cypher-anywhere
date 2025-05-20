@@ -965,6 +965,21 @@ runOnAdapters('CALL subquery propagates alias', async engine => {
   assert.deepStrictEqual(out.sort(), ['Alice', 'Bob', 'Carol']);
 });
 
+runOnAdapters('CALL with ORDER BY applies ordering', async engine => {
+  const q = 'CALL { RETURN 2 AS x UNION ALL RETURN 1 AS x } RETURN x ORDER BY x';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.x);
+  assert.deepStrictEqual(out, [1, 2]);
+});
+
+runOnAdapters('CALL with ORDER BY SKIP LIMIT', async engine => {
+  const q =
+    'CALL { UNWIND [1,2,3] AS x RETURN x } RETURN x ORDER BY x DESC SKIP 1 LIMIT 1';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.x);
+  assert.deepStrictEqual(out, [2]);
+});
+
 runOnAdapters('single hop match without rel variable', async engine => {
   const q = 'MATCH (p:Person)-[:ACTED_IN]->(m:Movie) RETURN p, m';
   const out = [];

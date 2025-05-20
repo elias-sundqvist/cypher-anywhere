@@ -215,6 +215,9 @@ export interface CallQuery {
   subquery: CypherAST[];
   returnItems: ReturnItem[];
   distinct?: boolean;
+  orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
+  skip?: Expression;
+  limit?: Expression;
 }
 
 export interface MatchChainQuery {
@@ -1493,7 +1496,15 @@ class Parser {
     const innerQuery = innerTokens.map(t => t.value).join(' ');
     const subquery = parseMany(innerQuery);
     const ret = this.parseReturnClause();
-    return { type: 'Call', subquery, returnItems: ret.items, distinct: ret.distinct };
+    return {
+      type: 'Call',
+      subquery,
+      returnItems: ret.items,
+      distinct: ret.distinct,
+      orderBy: ret.orderBy,
+      skip: ret.skip,
+      limit: ret.limit,
+    };
   }
 }
 
