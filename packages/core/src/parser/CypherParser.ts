@@ -73,6 +73,7 @@ export interface ReturnQuery {
 
 export type Expression =
   | { type: 'Literal'; value: string | number | boolean | unknown[] | null }
+  | { type: 'List'; items: Expression[] }
   | { type: 'Property'; variable: string; property: string }
   | { type: 'Variable'; name: string }
   | { type: 'Parameter'; name: string }
@@ -193,13 +194,13 @@ export interface MatchPathQuery {
 export interface ForeachQuery {
   type: 'Foreach';
   variable: string;
-  list: unknown[] | Expression;
+  list: Expression;
   statement: CypherAST;
 }
 
 export interface UnwindQuery {
   type: 'Unwind';
-  list: unknown[] | Expression;
+  list: Expression;
   variable: string;
   returnExpression: Expression;
   returnAlias?: string;
@@ -504,41 +505,6 @@ class Parser {
     return props;
   }
 
-  private parseLiteralValue(): unknown {
-    const tok = this.current();
-    if (!tok) throw new Error('Unexpected end of input');
-    if (tok.type === 'string') {
-      this.pos++;
-      return tok.value.slice(1, -1);
-    }
-    if (tok.type === 'number') {
-      this.pos++;
-      return Number(tok.value);
-    }
-    if (tok.type === 'punct' && tok.value === '[') {
-      this.pos++;
-      const arr: unknown[] = [];
-      while (this.current() && this.current()!.value !== ']') {
-        arr.push(this.parseLiteralValue());
-        if (!this.optional('punct', ',')) break;
-      }
-      this.consume('punct', ']');
-      return arr;
-    }
-    if (tok.type === 'parameter') {
-      this.pos++;
-      return { __param: tok.value };
-    }
-    if (
-      tok.type === 'identifier' &&
-      (tok.value === 'true' || tok.value === 'false' || tok.value === 'null')
-    ) {
-      this.pos++;
-      if (tok.value === 'null') return null;
-      return tok.value === 'true';
-    }
-    throw new Error('Unexpected value');
-  }
 
   private parseValue(): Expression {
     let left = this.parseTerm();
@@ -577,13 +543,15 @@ class Parser {
     }
     if (tok.type === 'punct' && tok.value === '[') {
       this.pos++;
-      const arr: unknown[] = [];
-      while (this.current() && this.current()!.value !== ']') {
-        arr.push(this.parseLiteralValue());
-        if (!this.optional('punct', ',')) break;
+      const items: Expression[] = [];
+      if (this.current()?.value !== ']') {
+        while (true) {
+          items.push(this.parseValue());
+          if (!this.optional('punct', ',')) break;
+        }
       }
       this.consume('punct', ']');
-      return { type: 'Literal', value: arr };
+      return { type: 'List', items };
     }
     if (tok.type === 'punct' && tok.value === '(') {
       this.pos++;
@@ -1465,42 +1433,14 @@ class Parser {
     this.consume('keyword', 'FOREACH');
     const variable = this.parseIdentifier();
     this.consume('keyword', 'IN');
-    let list: unknown[] | Expression;
-    if (this.current()?.value === '[') {
-      this.consume('punct', '[');
-      const arr: unknown[] = [];
-      if (this.current()?.value !== ']') {
-        while (true) {
-          arr.push(this.parseLiteralValue());
-          if (!this.optional('punct', ',')) break;
-        }
-      }
-      this.consume('punct', ']');
-      list = arr;
-    } else {
-      list = this.parseValue();
-    }
+    const list = this.parseValue();
     const statement = this.parse();
     return { type: 'Foreach', variable, list, statement };
   }
 
   private parseUnwind(): UnwindQuery {
     this.consume('keyword', 'UNWIND');
-    let list: unknown[] | Expression;
-    if (this.current()?.value === '[') {
-      this.consume('punct', '[');
-      const arr: unknown[] = [];
-      if (this.current()?.value !== ']') {
-        while (true) {
-          arr.push(this.parseLiteralValue());
-          if (!this.optional('punct', ',')) break;
-        }
-      }
-      this.consume('punct', ']');
-      list = arr;
-    } else {
-      list = this.parseValue();
-    }
+    const list = this.parseValue();
     this.consume('keyword', 'AS');
     const variable = this.parseIdentifier();
     this.consume('keyword', 'RETURN');

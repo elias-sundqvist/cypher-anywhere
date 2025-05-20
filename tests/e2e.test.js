@@ -711,6 +711,12 @@ runOnAdapters('UNWIND with return alias', async engine => {
   assert.deepStrictEqual(out.sort(), [1, 2, 3]);
 });
 
+runOnAdapters('UNWIND array with expressions', async engine => {
+  const out = [];
+  for await (const row of engine.run('UNWIND [1, 1+1, 1+2] AS x RETURN x')) out.push(row.x);
+  assert.deepStrictEqual(out.sort(), [1, 2, 3]);
+});
+
 runOnAdapters('UNWIND nodes from path', async engine => {
   const script =
     'MATCH p=(a:Person {name:"Alice"})-[*]->(g:Genre {name:"Action"}) RETURN p; ' +
@@ -1111,6 +1117,13 @@ runOnAdapters('arithmetic multiplication and division in RETURN', async engine =
   const out = [];
   for await (const row of engine.run(q)) out.push(row.val);
   assert.deepStrictEqual(out, [((1999 - 1900) / 2) * 3, ((2014 - 1900) / 2) * 3]);
+});
+
+runOnAdapters('array expression in RETURN', async engine => {
+  const q = 'MATCH (p:Person {name:"Alice"}) RETURN [p.name, p.name + "!" ] AS arr';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.arr);
+  assert.deepStrictEqual(out, [['Alice', 'Alice!']]);
 });
 runOnAdapters('RETURN star returns all variables', async engine => {
   const out = [];
