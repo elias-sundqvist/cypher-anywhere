@@ -90,6 +90,13 @@ runOnAdapters('SET updates node property', async engine => {
   }
 });
 
+runOnAdapters('SET multiple properties', async engine => {
+  for await (const row of engine.run('MATCH (n:Person {name:"Bob"}) SET n.age = 31, n.flag = true RETURN n')) {
+    assert.strictEqual(row.n.properties.age, 31);
+    assert.strictEqual(row.n.properties.flag, true);
+  }
+});
+
 runOnAdapters('DELETE removes node', async engine => {
   for await (const _ of engine.run('MATCH (n:Person {name:"Carol"}) DELETE n')) {}
   const out = [];
