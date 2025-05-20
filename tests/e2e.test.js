@@ -641,6 +641,12 @@ runOnAdapters('UNWIND expression on list items', async engine => {
   assert.deepStrictEqual(out.sort(), [2, 3, 4]);
 });
 
+runOnAdapters('UNWIND with return alias', async engine => {
+  const out = [];
+  for await (const row of engine.run('UNWIND [1,2,3] AS x RETURN x AS val')) out.push(row.val);
+  assert.deepStrictEqual(out.sort(), [1, 2, 3]);
+});
+
 runOnAdapters('UNWIND nodes from path', async engine => {
   const script =
     'MATCH p=(a:Person {name:"Alice"})-[*]->(g:Genre {name:"Action"}) RETURN p; ' +
