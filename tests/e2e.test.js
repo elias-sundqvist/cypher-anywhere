@@ -590,3 +590,12 @@ runOnAdapters('single hop incoming match without labels', async engine => {
   const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
   assert.deepStrictEqual(out.sort(), expected.sort());
 });
+
+runOnAdapters('negative numeric literals parsed correctly', async engine => {
+  let node;
+  for await (const row of engine.run('CREATE (n:Neg {val:-5}) RETURN n')) node = row.n;
+  assert.strictEqual(node.properties.val, -5);
+  const out = [];
+  for await (const row of engine.run('MATCH (n:Neg) WHERE n.val < -1 RETURN n')) out.push(row.n);
+  assert.strictEqual(out.length, 1);
+});

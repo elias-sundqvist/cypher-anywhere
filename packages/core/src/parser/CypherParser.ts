@@ -222,7 +222,7 @@ function tokenize(input: string): Token[] {
       i += str[0].length;
       continue;
     }
-    const num = /^\d+(?:\.\d+)?/.exec(rest);
+    const num = /^-?\d+(?:\.\d+)?/.exec(rest);
     if (num) {
       tokens.push({ type: 'number', value: num[0] });
       i += num[0].length;
