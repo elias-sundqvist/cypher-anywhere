@@ -581,6 +581,14 @@ runOnAdapters('multi-hop chain length 3', async engine => {
   assert.strictEqual(out[0].properties.name, 'Thriller');
 });
 
+runOnAdapters('relationship chain with WHERE filters results', async engine => {
+  const out = [];
+  const q =
+    'MATCH (p:Person)-[:ACTED_IN]->(m:Movie) WHERE m.released > 2000 RETURN m.title AS title';
+  for await (const row of engine.run(q)) out.push(row.title);
+  assert.deepStrictEqual(out.sort(), ['John Wick', 'John Wick']);
+});
+
 runOnAdapters('return numeric addition expression', async engine => {
   const out = [];
   for await (const row of engine.run('MATCH (m:Movie) RETURN m.released+3')) out.push(row.value);

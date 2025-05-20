@@ -233,6 +233,7 @@ export interface MatchChainQuery {
       properties?: Record<string, unknown>;
     };
   }[];
+  where?: WhereClause;
   returnItems: ReturnItem[];
   orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
   skip?: Expression;
@@ -924,12 +925,18 @@ class Parser {
     properties?: Record<string, unknown>;
   }, optional = false): MatchChainQuery {
     const { startNode, hops } = this.parseChainPattern(start);
+    let where: WhereClause | undefined;
+    if (this.current()?.value === 'WHERE') {
+      this.consume('keyword', 'WHERE');
+      where = this.parseWhereClause();
+    }
     const ret = this.parseReturnClause();
     if (!ret.items.length) throw new Error('Parse error: RETURN required');
     return {
       type: 'MatchChain',
       start: startNode,
       hops,
+      where,
       returnItems: ret.items,
       orderBy: ret.orderBy,
       skip: ret.skip,
@@ -1032,6 +1039,11 @@ class Parser {
       const save = this.pos;
       try {
         const { startNode, hops } = this.parseChainPattern(start);
+        let where: WhereClause | undefined;
+        if (this.current()?.value === 'WHERE') {
+          this.consume('keyword', 'WHERE');
+          where = this.parseWhereClause();
+        }
         const hasAnonRel = hops.some(h => !h.rel.variable);
         const nextTok = this.current();
         if (nextTok?.value === 'RETURN') {
@@ -1041,7 +1053,8 @@ class Parser {
             ret.items.length === 1 &&
             ret.items[0].expression.type === 'Variable' &&
             hops[0].rel.variable === ret.items[0].expression.name &&
-            !hasAnonRel
+            !hasAnonRel &&
+            !where
           ) {
             // treat as simple pattern
             this.pos = save;
@@ -1050,6 +1063,7 @@ class Parser {
               type: 'MatchChain',
               start: startNode,
               hops,
+              where,
               returnItems: ret.items,
               orderBy: ret.orderBy,
               skip: ret.skip,
@@ -1064,6 +1078,7 @@ class Parser {
             type: 'MatchChain',
             start: startNode,
             hops,
+            where,
             returnItems: withClause.items,
             orderBy: withClause.orderBy,
             skip: withClause.skip,
