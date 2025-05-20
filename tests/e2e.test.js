@@ -924,6 +924,27 @@ runOnAdapters('COLLECT aggregation returns list', async engine => {
   assert.deepStrictEqual(row.names.sort(), ['Alice', 'Bob', 'Carol']);
 });
 
+runOnAdapters('MIN aggregation', async engine => {
+  const out = [];
+  const q = 'MATCH (m:Movie) RETURN MIN(m.released) AS year';
+  for await (const row of engine.run(q)) out.push(row.year);
+  assert.deepStrictEqual(out, [1999]);
+});
+
+runOnAdapters('MAX aggregation', async engine => {
+  const out = [];
+  const q = 'MATCH (m:Movie) RETURN MAX(m.released) AS year';
+  for await (const row of engine.run(q)) out.push(row.year);
+  assert.deepStrictEqual(out, [2014]);
+});
+
+runOnAdapters('MIN on empty result returns null', async engine => {
+  const out = [];
+  const q = 'MATCH (n:Missing) RETURN MIN(n.x) AS val';
+  for await (const row of engine.run(q)) out.push(row.val);
+  assert.deepStrictEqual(out, [null]);
+});
+
 runOnAdapters('UNION combines results', async engine => {
   const q =
     'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name ' +
