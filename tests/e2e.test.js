@@ -477,6 +477,13 @@ runOnAdapters('ORDER BY with SKIP and LIMIT', async engine => {
   assert.deepStrictEqual(out, ['Bob']);
 });
 
+runOnAdapters('ORDER BY DESC', async engine => {
+  const q = 'MATCH (m:Movie) RETURN m.released AS year ORDER BY year DESC';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.year);
+  assert.deepStrictEqual(out, [2014, 1999]);
+});
+
 runOnAdapters('RETURN multiple expressions with aliases', async engine => {
   const q = 'MATCH (m:Movie) RETURN m.title AS title, m.released AS year ORDER BY year';
   const out = [];
