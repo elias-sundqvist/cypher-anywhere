@@ -449,8 +449,12 @@ class Parser {
       this.pos++;
       return { __param: tok.value };
     }
-    if (tok.type === 'identifier' && (tok.value === 'true' || tok.value === 'false')) {
+    if (
+      tok.type === 'identifier' &&
+      (tok.value === 'true' || tok.value === 'false' || tok.value === 'null')
+    ) {
       this.pos++;
+      if (tok.value === 'null') return null;
       return tok.value === 'true';
     }
     throw new Error('Unexpected value');
@@ -504,8 +508,9 @@ class Parser {
       return { type: 'Parameter', name: tok.value };
     }
     if (tok.type === 'identifier') {
-      if (tok.value === 'true' || tok.value === 'false') {
+      if (tok.value === 'true' || tok.value === 'false' || tok.value === 'null') {
         this.pos++;
+        if (tok.value === 'null') return { type: 'Literal', value: null };
         return { type: 'Literal', value: tok.value === 'true' };
       }
       if (tok.value === 'null') {
