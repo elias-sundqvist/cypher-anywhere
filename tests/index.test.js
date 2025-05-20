@@ -95,3 +95,21 @@ test('planner uses index for WHERE IN list', async () => {
   assert.strictEqual(out.length, 1);
   assert.ok(used);
 });
+
+test('planner uses getNodeById for WHERE id(n) equality', async () => {
+  const data = makeDataset(10);
+  const adapter = new JsonAdapter({ dataset: data });
+  let used = false;
+  const orig = adapter.getNodeById.bind(adapter);
+  adapter.getNodeById = async id => {
+    used = true;
+    return await orig(id);
+  };
+  const engine = new CypherEngine({ adapter });
+  const out = [];
+  for await (const row of engine.run('MATCH (n) WHERE id(n) = 5 RETURN n')) {
+    out.push(row.n);
+  }
+  assert.strictEqual(out.length, 1);
+  assert.ok(used);
+});

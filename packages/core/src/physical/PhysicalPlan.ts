@@ -619,6 +619,52 @@ export function logicalToPhysical(
           }
           if (
             !boundNode &&
+            adapter.getNodeById &&
+            plan.where &&
+            plan.where.type === 'Condition' &&
+            plan.where.left.type === 'Id' &&
+            plan.where.left.variable === plan.variable
+          ) {
+            if (plan.where.operator === '=') {
+              const idVal = evalExpr(plan.where.right!, vars, params);
+              const node = await adapter.getNodeById(idVal);
+              if (
+                node &&
+                (!plan.labels || plan.labels.every(l => node.labels.includes(l))) &&
+                (!plan.properties ||
+                  Object.entries(plan.properties).every(
+                    ([k, v]) => node.properties[k] === evalPropValue(v, vars, params)
+                  ))
+              ) {
+                await collect(node);
+                usedIndex = true;
+              }
+            } else if (plan.where.operator === 'IN') {
+              const ids = evalExpr(plan.where.right!, vars, params);
+              if (Array.isArray(ids)) {
+                const seen = new Set<number | string>();
+                for (const id of ids) {
+                  const node = await adapter.getNodeById(id);
+                  if (
+                    node &&
+                    !seen.has(node.id) &&
+                    (!plan.labels || plan.labels.every(l => node.labels.includes(l))) &&
+                    (!plan.properties ||
+                      Object.entries(plan.properties).every(
+                        ([k, v]) => node.properties[k] === evalPropValue(v, vars, params)
+                      ))
+                  ) {
+                    seen.add(node.id);
+                    await collect(node);
+                    usedIndex = true;
+                  }
+                }
+              }
+            }
+          }
+          if (
+            !usedIndex &&
+            !boundNode &&
             plan.labels &&
             plan.labels.length > 0 &&
             plan.properties &&
