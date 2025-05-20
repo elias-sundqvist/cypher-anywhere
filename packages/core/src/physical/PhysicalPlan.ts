@@ -310,11 +310,21 @@ export function logicalToPhysical(
               }
               group.row[aliasFor(item, idx)] = val;
             });
-            rows.push({ row: group.row, record: group.record });
+            let order: any;
+            if (plan.orderBy) {
+              const aliasVars = new Map(vars);
+              plan.returnItems.forEach((it, i) => {
+                const alias = aliasFor(it, i);
+                aliasVars.set(alias, group.row[alias]);
+                if (it.alias) aliasVars.set(it.alias, group.row[alias]);
+              });
+              order = evalExpr(plan.orderBy, aliasVars, params);
+            }
+            rows.push({ row: group.row, order, record: group.record });
           }
         }
 
-        if (plan.orderBy && !hasAgg) {
+        if (plan.orderBy) {
           rows.sort((a, b) => {
             if (a.order === b.order) return 0;
             if (a.order === undefined) return 1;
