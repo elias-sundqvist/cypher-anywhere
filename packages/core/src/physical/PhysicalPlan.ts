@@ -348,9 +348,10 @@ export function logicalToPhysical(
           });
         }
 
-        const start = plan.skip ?? 0;
+        const start = plan.skip ? Number(evalExpr(plan.skip, vars, params)) : 0;
         let end = rows.length;
-        if (plan.limit !== undefined) end = Math.min(end, start + plan.limit);
+        if (plan.limit !== undefined)
+          end = Math.min(end, start + Number(evalExpr(plan.limit, vars, params)));
         if (rows.length === 0 && plan.optional) {
           vars.delete(plan.variable);
           const row: Record<string, unknown> = {};
@@ -742,9 +743,10 @@ export function logicalToPhysical(
             return 0;
           });
         }
-        const startIdx = plan.skip ?? 0;
+        const startIdx = plan.skip ? Number(evalExpr(plan.skip, vars, params)) : 0;
         let end = rows.length;
-        if (plan.limit !== undefined) end = Math.min(end, startIdx + plan.limit);
+        if (plan.limit !== undefined)
+          end = Math.min(end, startIdx + Number(evalExpr(plan.limit, vars, params)));
         for (let i = startIdx; i < end; i++) {
           yield rows[i].row;
         }

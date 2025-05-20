@@ -13,8 +13,8 @@ export interface MatchReturnQuery {
   where?: WhereClause;
   returnItems: ReturnItem[];
   orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
-  skip?: number;
-  limit?: number;
+  skip?: Expression;
+  limit?: Expression;
 }
 
 export interface CreateQuery {
@@ -169,8 +169,8 @@ export interface MatchChainQuery {
   }[];
   returnItems: ReturnItem[];
   orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
-  skip?: number;
-  limit?: number;
+  skip?: Expression;
+  limit?: Expression;
 }
 
 export type CypherAST =
@@ -508,8 +508,8 @@ class Parser {
   private parseReturnClause(): {
     items: ReturnItem[];
     orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
-    skip?: number;
-    limit?: number;
+    skip?: Expression;
+    limit?: Expression;
   } {
     this.consume('keyword', 'RETURN');
     const items: ReturnItem[] = [];
@@ -540,15 +540,15 @@ class Parser {
         if (!this.optional('punct', ',')) break;
       }
     }
-    let skip: number | undefined;
+    let skip: Expression | undefined;
     if (this.current()?.value === 'SKIP') {
       this.consume('keyword', 'SKIP');
-      skip = Number(this.consume('number').value);
+      skip = this.parseValue();
     }
-    let limit: number | undefined;
+    let limit: Expression | undefined;
     if (this.current()?.value === 'LIMIT') {
       this.consume('keyword', 'LIMIT');
-      limit = Number(this.consume('number').value);
+      limit = this.parseValue();
     }
     return { items, orderBy, skip, limit };
   }
