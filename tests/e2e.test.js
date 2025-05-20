@@ -924,6 +924,14 @@ runOnAdapters('COLLECT aggregation returns list', async engine => {
   assert.deepStrictEqual(row.names.sort(), ['Alice', 'Bob', 'Carol']);
 });
 
+runOnAdapters('COLLECT DISTINCT aggregation', async engine => {
+  const q = 'MATCH (p:Person) RETURN COLLECT(DISTINCT p.name) AS names';
+  let row;
+  for await (const r of engine.run(q)) row = r;
+  assert.ok(row);
+  assert.deepStrictEqual(row.names.sort(), ['Alice', 'Bob', 'Carol']);
+});
+
 runOnAdapters('UNION combines results', async engine => {
   const q =
     'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name ' +
