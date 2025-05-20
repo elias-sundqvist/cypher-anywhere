@@ -430,6 +430,13 @@ runOnAdapters('variable length path excludes zero length', async engine => {
   }
 });
 
+runOnAdapters('variable length path can return end node', async engine => {
+  const q = 'MATCH p=(a:Person {name:"Alice"})-[*]->(g:Genre) RETURN g';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.g.properties.name);
+  assert.deepStrictEqual(out, ['Action']);
+});
+
 runOnAdapters('multi-hop ->()-> chain returns final node', async engine => {
   const out = [];
   const q =

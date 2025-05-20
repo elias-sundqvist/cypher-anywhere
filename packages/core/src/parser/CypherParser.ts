@@ -125,14 +125,20 @@ export interface MatchPathQuery {
   type: 'MatchPath';
   pathVariable: string;
   start: {
+    variable?: string;
     labels?: string[];
     properties?: Record<string, unknown>;
   };
   end: {
+    variable?: string;
     labels?: string[];
     properties?: Record<string, unknown>;
   };
-  returnVariable?: string;
+  returnItems?: ReturnItem[];
+  orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
+  skip?: Expression;
+  limit?: Expression;
+  distinct?: boolean;
 }
 
 export interface ForeachQuery {
@@ -748,15 +754,29 @@ class Parser {
       this.consume('punct', '-');
       this.consume('punct', '>');
       const end = this.parseNodePattern();
-      const ret = this.parseReturnVariable();
-      if (ret && ret !== pathVariable)
-        throw new Error('Parse error: return variable mismatch');
+      let returnItems: ReturnItem[] | undefined;
+      let orderBy;
+      let skip;
+      let limit;
+      let distinct;
+      if (this.current()?.value === 'RETURN') {
+        const ret = this.parseReturnClause();
+        returnItems = ret.items;
+        orderBy = ret.orderBy;
+        skip = ret.skip;
+        limit = ret.limit;
+        distinct = ret.distinct;
+      }
       return {
         type: 'MatchPath',
         pathVariable,
-        start: { labels: start.labels, properties: start.properties },
-        end: { labels: end.labels, properties: end.properties },
-        returnVariable: ret,
+        start: { variable: start.variable, labels: start.labels, properties: start.properties },
+        end: { variable: end.variable, labels: end.labels, properties: end.properties },
+        returnItems,
+        orderBy,
+        skip,
+        limit,
+        distinct,
       };
     }
     let pattern: { variable: string; labels?: string[]; properties?: Record<string, unknown>; isRel?: boolean };
