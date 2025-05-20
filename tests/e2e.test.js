@@ -647,3 +647,9 @@ runOnAdapters('negative numeric literals parsed correctly', async engine => {
   for await (const row of engine.run('MATCH (n:Neg) WHERE n.val < -1 RETURN n')) out.push(row.n);
   assert.strictEqual(out.length, 1);
 });
+runOnAdapters('arithmetic subtraction in RETURN', async engine => {
+  const q = 'MATCH (m:Movie) RETURN m.released - 1900 AS diff ORDER BY diff';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.diff);
+  assert.deepStrictEqual(out, [99, 114]);
+});

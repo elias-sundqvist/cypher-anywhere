@@ -30,6 +30,14 @@ function evalExpr(
         return l + r;
       }
       return String(l) + String(r);
+    case 'Sub': {
+      const l = evalExpr(expr.left, vars, params);
+      const r = evalExpr(expr.right, vars, params);
+      if (typeof l === 'number' && typeof r === 'number') {
+        return l - r;
+      }
+      return NaN;
+    }
     case 'Nodes':
       return vars.get(expr.variable);
     default:
