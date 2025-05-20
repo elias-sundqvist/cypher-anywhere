@@ -340,6 +340,19 @@ export function logicalToPhysical(
           }
         }
 
+        if (plan.distinct) {
+          const seen = new Set<string>();
+          const unique: typeof rows = [];
+          for (const r of rows) {
+            const key = JSON.stringify(r.row);
+            if (!seen.has(key)) {
+              seen.add(key);
+              unique.push(r);
+            }
+          }
+          rows.splice(0, rows.length, ...unique);
+        }
+
         if (plan.orderBy) {
           rows.sort((a, b) => {
             for (let i = 0; i < plan.orderBy!.length; i++) {
@@ -736,6 +749,20 @@ export function logicalToPhysical(
           varsStart.set(plan.start.variable, s);
           await traverse(s, 0, varsStart);
         }
+
+        if (plan.distinct) {
+          const seen = new Set<string>();
+          const unique: typeof rows = [];
+          for (const r of rows) {
+            const key = JSON.stringify(r.row);
+            if (!seen.has(key)) {
+              seen.add(key);
+              unique.push(r);
+            }
+          }
+          rows.splice(0, rows.length, ...unique);
+        }
+
         if (plan.orderBy) {
           rows.sort((a, b) => {
             for (let i = 0; i < plan.orderBy!.length; i++) {
@@ -832,6 +859,7 @@ export function logicalToPhysical(
           logicalToPhysical(astToLogical(q), adapter)
         );
         const local = new Map(vars);
+        const outRows: Record<string, unknown>[] = [];
         for (let i = 0; i < innerPlans.length; i++) {
           const p = innerPlans[i];
           let idx = 0;
@@ -849,9 +877,24 @@ export function logicalToPhysical(
                     : `value${ridx}`);
                 out[alias] = evalExpr(item.expression, local, params);
               });
-              yield out;
+              outRows.push(out);
             }
           }
+        }
+        let rowsToYield = outRows;
+        if (plan.distinct) {
+          const seen = new Set<string>();
+          rowsToYield = [];
+          for (const r of outRows) {
+            const key = JSON.stringify(r);
+            if (!seen.has(key)) {
+              seen.add(key);
+              rowsToYield.push(r);
+            }
+          }
+        }
+        for (const r of rowsToYield) {
+          yield r;
         }
         break;
       }
