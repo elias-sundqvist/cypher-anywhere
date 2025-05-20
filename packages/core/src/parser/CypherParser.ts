@@ -160,7 +160,7 @@ export interface MatchChainQuery {
       variable?: string;
       type?: string;
       properties?: Record<string, unknown>;
-      direction: 'out' | 'in';
+      direction: 'out' | 'in' | 'none';
     };
     node: {
       variable: string;
@@ -604,7 +604,7 @@ class Parser {
     const hops: MatchChainQuery['hops'] = [];
     let current = start;
     while (this.current()?.value === '-' || this.current()?.value === '<') {
-      let direction: 'out' | 'in' = 'out';
+      let direction: 'out' | 'in' | 'none' = 'out';
       if (this.current()?.value === '<') {
         this.consume('punct', '<');
         this.consume('punct', '-');
@@ -629,7 +629,11 @@ class Parser {
       this.consume('punct', ']');
       this.consume('punct', '-');
       if (direction === 'out') {
-        this.consume('punct', '>');
+        if (this.optional('punct', '>')) {
+          direction = 'out';
+        } else {
+          direction = 'none';
+        }
       }
       const next = this.parseNodePattern();
       hops.push({
@@ -723,7 +727,7 @@ class Parser {
       }
       this.consume('punct', ']');
       this.consume('punct', '-');
-      this.consume('punct', '>');
+      this.optional('punct', '>');
       this.parseMaybeNodePattern();
       pattern = { variable: relVar, labels: relType ? [relType] : undefined, properties: relProps, isRel: true };
     } else {
