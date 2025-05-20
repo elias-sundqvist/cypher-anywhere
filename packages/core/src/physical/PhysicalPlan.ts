@@ -779,7 +779,7 @@ export function logicalToPhysical(
           endNode.id,
           evalProps(plan.relProperties ?? {}, vars, params)
         );
-        if (plan.returnVariable) {
+        if (plan.returnVariable && plan.relVariable) {
           vars.set(plan.relVariable, rel);
           yield { [plan.relVariable]: rel };
         }
@@ -824,7 +824,7 @@ export function logicalToPhysical(
           );
           created = true;
         }
-        vars.set(plan.relVariable, existing);
+        if (plan.relVariable) vars.set(plan.relVariable, existing);
         if (created && plan.onCreateSet && adapter.updateRelationshipProperties) {
           for (const [k, expr] of Object.entries(plan.onCreateSet)) {
             const val = evalExpr(expr, vars, params);
@@ -839,7 +839,7 @@ export function logicalToPhysical(
             existing.properties[k] = val;
           }
         }
-        if (plan.returnVariable) {
+        if (plan.returnVariable && plan.relVariable) {
           yield { [plan.relVariable]: existing };
         }
         break;
