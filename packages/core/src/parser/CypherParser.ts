@@ -456,6 +456,12 @@ class Parser {
       this.consume('punct', ']');
       return { type: 'Literal', value: arr };
     }
+    if (tok.type === 'punct' && tok.value === '(') {
+      this.pos++;
+      const expr = this.parseValue();
+      this.consume('punct', ')');
+      return expr;
+    }
     if (tok.type === 'punct' && tok.value === '*') {
       this.pos++;
       return { type: 'All' };
@@ -575,6 +581,12 @@ class Parser {
       if (this.current()?.value === 'NOT') {
         this.consume('keyword', 'NOT');
         return { type: 'Not', clause: parseNot() };
+      }
+      if (this.current()?.value === '(') {
+        this.consume('punct', '(');
+        const inner = this.parseWhereClause();
+        this.consume('punct', ')');
+        return inner;
       }
       const left = this.parseValue();
       if (this.current()?.value === 'IN') {
