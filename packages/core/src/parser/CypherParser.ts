@@ -46,7 +46,7 @@ export interface MatchDeleteQuery {
 }
 
 export type Expression =
-  | { type: 'Literal'; value: string | number | boolean }
+  | { type: 'Literal'; value: string | number | boolean | unknown[] }
   | { type: 'Property'; variable: string; property: string }
   | { type: 'Variable'; name: string }
   | { type: 'Parameter'; name: string }
@@ -62,7 +62,7 @@ export type WhereClause =
   | {
       type: 'Condition';
       left: Expression;
-      operator: '=' | '>' | '>=' | '<' | '<=' | '<>';
+      operator: '=' | '>' | '>=' | '<' | '<=' | '<>' | 'IN';
       right: Expression;
     }
   | { type: 'And'; left: WhereClause; right: WhereClause }
@@ -438,6 +438,16 @@ class Parser {
       this.pos++;
       return { type: 'Literal', value: Number(tok.value) };
     }
+    if (tok.type === 'punct' && tok.value === '[') {
+      this.pos++;
+      const arr: unknown[] = [];
+      while (this.current() && this.current()!.value !== ']') {
+        arr.push(this.parseLiteralValue());
+        if (!this.optional('punct', ',')) break;
+      }
+      this.consume('punct', ']');
+      return { type: 'Literal', value: arr };
+    }
     if (tok.type === 'parameter') {
       this.pos++;
       return { type: 'Parameter', name: tok.value };
@@ -548,6 +558,11 @@ class Parser {
         return { type: 'Not', clause: parseNot() };
       }
       const left = this.parseValue();
+      if (this.current()?.value === 'IN') {
+        this.consume('keyword', 'IN');
+        const right = this.parseValue();
+        return { type: 'Condition', left, operator: 'IN', right };
+      }
       const opTok = this.consume('punct');
       let op: '=' | '>' | '>=' | '<' | '<=' | '<>' = opTok.value as any;
       if (opTok.value === '<' && this.optional('punct', '>')) {
