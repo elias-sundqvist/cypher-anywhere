@@ -551,6 +551,14 @@ runOnAdapters('variable length path exact length', async engine => {
   assert.deepStrictEqual(out.sort(), [1, 1]);
 });
 
+runOnAdapters('variable length path with zero minimum includes zero hop', async engine => {
+  const q =
+    'MATCH p=(a:Person {name:"Alice"})-[*0..2]->(a:Person {name:"Alice"}) RETURN length(p) AS len';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.len);
+  assert.deepStrictEqual(out, [0]);
+});
+
 runOnAdapters('variable length incoming path', async engine => {
   const q =
     'MATCH q=(m:Movie {title:"John Wick"})<-[*]-(a:Person {name:"Alice"}) RETURN length(q) AS len';

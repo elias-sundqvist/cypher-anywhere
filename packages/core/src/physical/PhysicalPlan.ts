@@ -128,7 +128,7 @@ async function* findPaths(
     const { nodes: path, relationships: pathRels } = queue.shift()!;
     const last = path[path.length - 1];
     const hops = path.length - 1;
-    if (last === endId && hops >= minHops && hops <= maxHops && hops > 0) {
+    if (last === endId && hops >= minHops && hops <= maxHops) {
       const nodes: NodeRecord[] = [];
       for (const id of path) {
         const n = await adapter.getNodeById(id);
