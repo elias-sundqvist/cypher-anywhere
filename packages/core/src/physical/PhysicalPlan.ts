@@ -1064,6 +1064,37 @@ export function logicalToPhysical(
         }
         break;
       }
+      case 'Return': {
+        const aliasFor = (item: typeof plan.returnItems[number], idx: number): string => {
+          if (item.alias) return item.alias;
+          if (item.expression.type === 'Variable') return item.expression.name;
+          return plan.returnItems.length === 1 ? 'value' : `value${idx}`;
+        };
+        const row: Record<string, unknown> = {};
+        const aliasVars = new Map(vars);
+        plan.returnItems.forEach((item, idx) => {
+          if (item.expression.type === 'All') {
+            for (const [k, v] of vars.entries()) {
+              row[k] = v;
+              aliasVars.set(k, v);
+            }
+          } else {
+            const val = evalExpr(item.expression, vars, params);
+            const alias = aliasFor(item, idx);
+            row[alias] = val;
+            if (item.alias) aliasVars.set(item.alias, val);
+          }
+        });
+        let include = true;
+        const skip = plan.skip ? Number(evalExpr(plan.skip, vars, params)) : 0;
+        let limit = plan.limit ? Number(evalExpr(plan.limit, vars, params)) : 1;
+        if (skip > 0) include = false;
+        if (include && limit > 0) {
+          yield row;
+          limit--;
+        }
+        break;
+      }
       case 'Call': {
         const innerPlans = plan.subquery.map(q =>
           logicalToPhysical(astToLogical(q), adapter)
