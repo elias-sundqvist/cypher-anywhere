@@ -238,6 +238,7 @@ export interface MatchChainQuery {
   skip?: Expression;
   limit?: Expression;
   distinct?: boolean;
+  optional?: boolean;
 }
 
 export interface WithQuery {
@@ -921,7 +922,7 @@ class Parser {
     variable?: string;
     labels?: string[];
     properties?: Record<string, unknown>;
-  }): MatchChainQuery {
+  }, optional = false): MatchChainQuery {
     const { startNode, hops } = this.parseChainPattern(start);
     const ret = this.parseReturnClause();
     if (!ret.items.length) throw new Error('Parse error: RETURN required');
@@ -934,6 +935,7 @@ class Parser {
       skip: ret.skip,
       limit: ret.limit,
       distinct: ret.distinct,
+      optional,
     };
   }
 
@@ -1053,6 +1055,7 @@ class Parser {
               skip: ret.skip,
               limit: ret.limit,
               distinct: ret.distinct,
+              optional,
             };
           }
         } else if (nextTok?.value === 'WITH') {
@@ -1066,6 +1069,7 @@ class Parser {
             skip: withClause.skip,
             limit: withClause.limit,
             distinct: withClause.distinct,
+            optional,
           };
           const nextStmt = this.parse();
           return { type: 'With', source, where: withClause.where, next: nextStmt };

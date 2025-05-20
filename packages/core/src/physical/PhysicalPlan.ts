@@ -1434,8 +1434,31 @@ export function logicalToPhysical(
         let end = rows.length;
         if (plan.limit !== undefined)
           end = Math.min(end, startIdx + Number(evalExpr(plan.limit, vars, params)));
-        for (let i = startIdx; i < end; i++) {
-          yield rows[i].row;
+        if (rows.length === 0 && plan.optional) {
+          const local = new Map(vars);
+          local.delete(plan.start.variable);
+          for (const h of plan.hops) {
+            if (h.rel.variable) local.delete(h.rel.variable);
+            local.delete(h.node.variable);
+          }
+          const row: Record<string, unknown> = {};
+          plan.returnItems.forEach((item, idx) => {
+            if (hasAggItem[idx]) {
+              row[aliasFor(item, idx)] = finalizeAgg(
+                item.expression,
+                initAggState(item.expression),
+                local,
+                params
+              );
+            } else {
+              row[aliasFor(item, idx)] = evalExpr(item.expression, local, params);
+            }
+          });
+          yield row;
+        } else {
+          for (let i = startIdx; i < end; i++) {
+            yield rows[i].row;
+          }
         }
         break;
       }
