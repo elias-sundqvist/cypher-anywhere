@@ -1003,6 +1003,13 @@ runOnAdapters('id() on relationship returns rel id', async engine => {
   assert.deepStrictEqual(out, [7]);
 });
 
+runOnAdapters('WITH alias named id allowed', async engine => {
+  const q = 'MATCH (n:Person {name:"Alice"}) WITH id(n) AS id RETURN id';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.id);
+  assert.deepStrictEqual(out, [1]);
+});
+
 runOnAdapters('standalone RETURN expression', async engine => {
   const out = [];
   for await (const row of engine.run('RETURN 42 AS val')) out.push(row.val);
