@@ -569,6 +569,12 @@ export function logicalToPhysical(
           throw new Error('Adapter does not support MATCH');
         const scanRels = adapter.scanRelationships!.bind(adapter);
         const getNode = adapter.getNodeById!.bind(adapter);
+        const aliasFor = (item: typeof plan.returnItems[number], idx: number): string => {
+          if (item.alias) return item.alias;
+          if (item.expression.type === 'Variable') return item.expression.name;
+          return plan.returnItems.length === 1 ? 'value' : `value${idx}`;
+        };
+        const rows: { row: Record<string, unknown>; order?: any }[] = [];
         const startNodes: NodeRecord[] = [];
         for await (const node of adapter.scanNodes(
           plan.start.labels ? { labels: plan.start.labels } : {}
@@ -584,14 +590,18 @@ export function logicalToPhysical(
           }
           if (ok) startNodes.push(node);
         }
-        const traverse = async function* (
+        const traverse = async (
           node: NodeRecord,
           hop: number,
           varsLocal: Map<string, any>
-        ): AsyncIterable<Record<string, unknown>> {
+        ): Promise<void> => {
           if (hop >= plan.hops.length) {
-            const ret = varsLocal.get(plan.returnVariable);
-            if (ret) yield { [plan.returnVariable]: ret };
+            const row: Record<string, unknown> = {};
+            plan.returnItems.forEach((item, idx) => {
+              row[aliasFor(item, idx)] = evalExpr(item.expression, varsLocal, params);
+            });
+            const order = plan.orderBy ? evalExpr(plan.orderBy, varsLocal, params) : undefined;
+            rows.push({ row, order });
             return;
           }
           const step = plan.hops[hop];
@@ -629,19 +639,29 @@ export function logicalToPhysical(
               if (!ok) continue;
             }
             const varsNext = new Map(varsLocal);
-            varsNext.set(step.rel.variable, rel);
+            if (step.rel.variable) varsNext.set(step.rel.variable, rel);
             varsNext.set(step.node.variable, nextNode);
-            for await (const row of traverse(nextNode, hop + 1, varsNext)) {
-              yield row;
-            }
+            await traverse(nextNode, hop + 1, varsNext);
           }
         };
         for (const s of startNodes) {
           const varsStart = new Map(vars);
           varsStart.set(plan.start.variable, s);
-          for await (const row of traverse(s, 0, varsStart)) {
-            yield row;
-          }
+          await traverse(s, 0, varsStart);
+        }
+        if (plan.orderBy) {
+          rows.sort((a, b) => {
+            if (a.order === b.order) return 0;
+            if (a.order === undefined) return 1;
+            if (b.order === undefined) return -1;
+            return a.order > b.order ? 1 : -1;
+          });
+        }
+        const startIdx = plan.skip ?? 0;
+        let end = rows.length;
+        if (plan.limit !== undefined) end = Math.min(end, startIdx + plan.limit);
+        for (let i = startIdx; i < end; i++) {
+          yield rows[i].row;
         }
         break;
       }

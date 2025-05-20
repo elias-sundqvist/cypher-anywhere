@@ -538,3 +538,35 @@ runOnAdapters('CALL subquery returns rows', async engine => {
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
 });
+
+runOnAdapters('single hop match without rel variable', async engine => {
+  const q = 'MATCH (p:Person)-[:ACTED_IN]->(m:Movie) RETURN p, m';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(`${row.p.properties.name}-${row.m.properties.title}`);
+  const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
+  assert.deepStrictEqual(out.sort(), expected.sort());
+});
+
+runOnAdapters('single hop incoming match without rel variable', async engine => {
+  const q = 'MATCH (m:Movie)<-[:ACTED_IN]-(p:Person) RETURN p, m';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(`${row.p.properties.name}-${row.m.properties.title}`);
+  const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
+  assert.deepStrictEqual(out.sort(), expected.sort());
+});
+
+runOnAdapters('single hop match without labels', async engine => {
+  const q = 'MATCH (a)-[:ACTED_IN]->(b) RETURN a, b';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(`${row.a.properties.name}-${row.b.properties.title}`);
+  const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
+  assert.deepStrictEqual(out.sort(), expected.sort());
+});
+
+runOnAdapters('single hop incoming match without labels', async engine => {
+  const q = 'MATCH (b)<-[:ACTED_IN]-(a) RETURN a, b';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(`${row.a.properties.name}-${row.b.properties.title}`);
+  const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
+  assert.deepStrictEqual(out.sort(), expected.sort());
+});
