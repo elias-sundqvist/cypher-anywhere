@@ -91,6 +91,8 @@ function evalWhere(
           return (l as any) < (r as any);
         case '<=':
           return (l as any) <= (r as any);
+        case '<>':
+          return l !== r;
         default:
           throw new Error('Unknown operator');
       }

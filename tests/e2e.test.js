@@ -341,6 +341,12 @@ runOnAdapters('match with WHERE using NOT', async engine => {
   assert.strictEqual(out.length, 2);
 });
 
+runOnAdapters('match with WHERE not equals operator', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH (n:Person) WHERE n.name <> "Alice" RETURN n')) out.push(row.n);
+  assert.strictEqual(out.length, 2);
+});
+
 runOnAdapters('FOREACH create multiple nodes', async engine => {
   for await (const _ of engine.run('FOREACH x IN [1,2,3] CREATE (n:Batch)')) {}
   const out = [];

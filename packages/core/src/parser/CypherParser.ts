@@ -61,7 +61,7 @@ export type WhereClause =
   | {
       type: 'Condition';
       left: Expression;
-      operator: '=' | '>' | '>=' | '<' | '<=';
+      operator: '=' | '>' | '>=' | '<' | '<=' | '<>';
       right: Expression;
     }
   | { type: 'And'; left: WhereClause; right: WhereClause }
@@ -548,8 +548,10 @@ class Parser {
       }
       const left = this.parseValue();
       const opTok = this.consume('punct');
-      let op: '=' | '>' | '>=' | '<' | '<=' = opTok.value as any;
-      if (opTok.value === '>' && this.optional('punct', '=')) {
+      let op: '=' | '>' | '>=' | '<' | '<=' | '<>' = opTok.value as any;
+      if (opTok.value === '<' && this.optional('punct', '>')) {
+        op = '<>';
+      } else if (opTok.value === '>' && this.optional('punct', '=')) {
         op = '>=';
       } else if (opTok.value === '<' && this.optional('punct', '=')) {
         op = '<=';
