@@ -1203,6 +1203,13 @@ runOnAdapters('NULL literal handled in create and match', async engine => {
   assert.strictEqual(out.length, 1);
 });
 
+runOnAdapters('NULL in arithmetic returns NULL', async engine => {
+  const q = 'RETURN null + 1 AS a, 1 + null AS b, null * 2 AS c, -null AS d';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row);
+  assert.deepStrictEqual(out, [{ a: null, b: null, c: null, d: null }]);
+});
+
 runOnAdapters('WITH passes variable to subsequent MATCH', async engine => {
   const q =
     'MATCH (p:Person {name:"Alice"}) WITH p MATCH (p)-[:ACTED_IN]->(m) RETURN m.title AS title';
