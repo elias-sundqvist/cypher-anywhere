@@ -73,15 +73,17 @@ function evalExpr(
         return undefined;
       }
     case 'Length': {
-      const val = vars.get(expr.variable);
+      let val: any;
+      if (expr.expression.type === 'Variable') {
+        val = vars.get(expr.expression.name);
+      } else {
+        val = evalExpr(expr.expression, vars, params);
+      }
       if (val && typeof val === 'object' && 'relationships' in val) {
         return (val as any).relationships.length;
       }
-      if (Array.isArray(val)) {
-        return val.length > 0 ? val.length - 1 : 0;
-      }
-      if (typeof val === 'string') {
-        return val.length;
+      if (Array.isArray(val) || typeof val === 'string') {
+        return (val as any).length;
       }
       return undefined;
     }
