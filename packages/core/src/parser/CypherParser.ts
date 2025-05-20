@@ -470,6 +470,11 @@ class Parser {
       this.pos++;
       return { type: 'Literal', value: Number(tok.value) };
     }
+    if (tok.type === 'punct' && tok.value === '-') {
+      this.pos++;
+      const expr = this.parseValueAtom();
+      return { type: 'Sub', left: { type: 'Literal', value: 0 }, right: expr };
+    }
     if (tok.type === 'punct' && tok.value === '[') {
       this.pos++;
       const arr: unknown[] = [];

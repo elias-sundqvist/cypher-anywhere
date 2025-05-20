@@ -854,3 +854,10 @@ runOnAdapters('standalone RETURN expression', async engine => {
   for await (const row of engine.run('RETURN 42 AS val')) out.push(row.val);
   assert.deepStrictEqual(out, [42]);
 });
+
+runOnAdapters('unary minus on property expression', async engine => {
+  const out = [];
+  const q = 'MATCH (m:Movie {title:"The Matrix"}) RETURN -m.released AS neg';
+  for await (const row of engine.run(q)) out.push(row.neg);
+  assert.deepStrictEqual(out, [-1999]);
+});
