@@ -647,6 +647,13 @@ runOnAdapters('SUM aggregation', async engine => {
   assert.strictEqual(out[0], 1999 + 2014);
 });
 
+runOnAdapters('aggregation inside expression', async engine => {
+  const out = [];
+  const q = 'MATCH (m:Movie) RETURN COUNT(m) + 1 AS cnt';
+  for await (const row of engine.run(q)) out.push(row.cnt);
+  assert.deepStrictEqual(out, [3]);
+});
+
 runOnAdapters('GROUP BY with COUNT', async engine => {
   const q = 'MATCH (m:Movie) RETURN m.released AS year, COUNT(m) AS cnt';
   const res = {};
