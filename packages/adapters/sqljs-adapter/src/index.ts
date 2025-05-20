@@ -5,6 +5,7 @@ import {
   NodeScanSpec,
   TransactionCtx,
   IndexMetadata,
+  parseMany
 } from '@cypher-anywhere/core';
 import type * as fsType from 'fs';
 import initSqlJs, { Database } from 'sql.js';
@@ -246,5 +247,67 @@ export class SqlJsAdapter implements StorageAdapter {
   async rollback(_: TransactionCtx): Promise<void> {
     await this.ensureReady();
     this.db.run('ROLLBACK');
+  }
+
+  supportsTranspilation = true;
+
+  runTranspiled(
+    cypher: string,
+    params: Record<string, any>
+  ): AsyncIterable<Record<string, unknown>> | null {
+    const asts = parseMany(cypher);
+    if (asts.length !== 1) return null;
+    const ast = asts[0];
+    if (ast.type !== 'MatchReturn') return null;
+    if (
+      ast.isRelationship ||
+      (ast.labels && ast.labels.length > 1) ||
+      ast.where ||
+      ast.orderBy ||
+      ast.skip ||
+      ast.limit ||
+      ast.optional
+    )
+      return null;
+    if (ast.returnItems.length !== 1) return null;
+    const ret = ast.returnItems[0];
+    if (ret.expression.type !== 'Variable') return null;
+    const alias = ret.alias || ret.expression.name;
+    if (ast.variable !== ret.expression.name) return null;
+
+    let sql = 'SELECT id, labels, properties FROM nodes';
+    const paramsArr: any[] = [];
+    const conds: string[] = [];
+    if (ast.labels && ast.labels.length === 1) {
+      conds.push('labels LIKE ?');
+      paramsArr.push(`%"${ast.labels[0]}"%`);
+    }
+    if (ast.properties) {
+      for (const [k, v] of Object.entries(ast.properties)) {
+        const val =
+          v && typeof v === 'object' && 'type' in v
+            ? v.type === 'Literal'
+              ? (v as any).value
+              : v.type === 'Parameter'
+              ? params[(v as any).name]
+              : undefined
+            : v;
+        conds.push(`json_extract(properties, '$.${k}') = ?`);
+        paramsArr.push(val);
+      }
+    }
+    if (conds.length > 0) sql += ' WHERE ' + conds.join(' AND ');
+    const self = this;
+    async function* gen() {
+      await self.ensureReady();
+      const stmt = self.db.prepare(sql);
+      stmt.bind(paramsArr);
+      while (stmt.step()) {
+        const row = self.rowToNode(stmt.getAsObject());
+        yield { [alias]: row };
+      }
+      stmt.free();
+    }
+    return gen();
   }
 }

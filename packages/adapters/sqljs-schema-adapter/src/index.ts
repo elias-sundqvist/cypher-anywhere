@@ -3,7 +3,9 @@ import {
   NodeRecord,
   RelRecord,
   NodeScanSpec,
-  IndexMetadata
+  IndexMetadata,
+  parseMany,
+  MatchReturnQuery
 } from '@cypher-anywhere/core';
 import initSqlJs, { Database } from 'sql.js';
 
@@ -153,5 +155,73 @@ export class SqlJsSchemaAdapter implements StorageAdapter {
   async listIndexes(): Promise<IndexMetadata[]> {
     await this.ensureReady();
     return this.indexes;
+  }
+
+  supportsTranspilation = true;
+
+  runTranspiled(
+    cypher: string,
+    params: Record<string, any>
+  ): AsyncIterable<Record<string, unknown>> | null {
+    const asts = parseMany(cypher);
+    if (asts.length !== 1) return null;
+    const ast = asts[0];
+    if (ast.type !== 'MatchReturn') return null;
+    const matchAst = ast as MatchReturnQuery;
+    if (
+      matchAst.isRelationship ||
+      (matchAst.labels && matchAst.labels.length > 1) ||
+      matchAst.where ||
+      matchAst.orderBy ||
+      matchAst.skip ||
+      matchAst.limit ||
+      matchAst.optional
+    )
+      return null;
+    if (matchAst.returnItems.length !== 1) return null;
+    const ret = matchAst.returnItems[0];
+    if (ret.expression.type !== 'Variable') return null;
+    const alias = ret.alias || ret.expression.name;
+    if (matchAst.variable !== ret.expression.name) return null;
+    if (this.schema.nodes.length !== 1) return null;
+    const table = this.schema.nodes[0];
+    let sql = `SELECT * FROM ${table.table}`;
+    const paramsArr: any[] = [];
+    const conds: string[] = [];
+    if (matchAst.labels && matchAst.labels.length === 1) {
+      if (table.labels && !table.labels.includes(matchAst.labels[0])) return null;
+    }
+    if (conds.length > 0) sql += ' WHERE ' + conds.join(' AND ');
+    const self = this;
+    async function* gen() {
+      await self.ensureReady();
+      const stmt = self.db.prepare(sql);
+      stmt.bind(paramsArr);
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        const node = self.rowToNode(row, table);
+        if (matchAst.properties) {
+          let ok = true;
+          for (const [k, v] of Object.entries(matchAst.properties)) {
+            const val =
+              v && typeof v === 'object' && 'type' in v
+                ? v.type === 'Literal'
+                  ? (v as any).value
+                  : v.type === 'Parameter'
+                  ? params[(v as any).name]
+                  : undefined
+                : v;
+            if (node.properties[k] !== val) {
+              ok = false;
+              break;
+            }
+          }
+          if (!ok) continue;
+        }
+        yield { [alias]: node };
+      }
+      stmt.free();
+    }
+    return gen();
   }
 }
