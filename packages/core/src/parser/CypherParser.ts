@@ -12,8 +12,7 @@ export interface MatchReturnQuery {
   optional?: boolean;
   where?: WhereClause;
   returnItems: ReturnItem[];
-  orderBy?: Expression;
-  orderDirection?: 'ASC' | 'DESC';
+  orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
   skip?: number;
   limit?: number;
 }
@@ -169,8 +168,7 @@ export interface MatchChainQuery {
     };
   }[];
   returnItems: ReturnItem[];
-  orderBy?: Expression;
-  orderDirection?: 'ASC' | 'DESC';
+  orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
   skip?: number;
   limit?: number;
 }
@@ -499,8 +497,7 @@ class Parser {
 
   private parseReturnClause(): {
     items: ReturnItem[];
-    orderBy?: Expression;
-    orderDirection?: 'ASC' | 'DESC';
+    orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
     skip?: number;
     limit?: number;
   } {
@@ -517,15 +514,20 @@ class Parser {
       idx++;
       if (!this.optional('punct', ',')) break;
     }
-    let orderBy: Expression | undefined;
-    let orderDirection: 'ASC' | 'DESC' | undefined;
+    let orderBy: { expression: Expression; direction?: 'ASC' | 'DESC' }[] | undefined;
     if (this.current()?.value === 'ORDER') {
       this.consume('keyword', 'ORDER');
       this.consume('keyword', 'BY');
-      orderBy = this.parseValue();
-      if (this.current()?.value === 'ASC' || this.current()?.value === 'DESC') {
-        orderDirection = this.current()!.value as 'ASC' | 'DESC';
-        this.consume('keyword');
+      orderBy = [];
+      while (true) {
+        const expr = this.parseValue();
+        let direction: 'ASC' | 'DESC' | undefined;
+        if (this.current()?.value === 'ASC' || this.current()?.value === 'DESC') {
+          direction = this.current()!.value as 'ASC' | 'DESC';
+          this.consume('keyword');
+        }
+        orderBy.push({ expression: expr, direction });
+        if (!this.optional('punct', ',')) break;
       }
     }
     let skip: number | undefined;
@@ -538,7 +540,7 @@ class Parser {
       this.consume('keyword', 'LIMIT');
       limit = Number(this.consume('number').value);
     }
-    return { items, orderBy, orderDirection, skip, limit };
+    return { items, orderBy, skip, limit };
   }
 
   private parseWhereClause(): WhereClause {
@@ -639,7 +641,6 @@ class Parser {
       hops,
       returnItems: ret.items,
       orderBy: ret.orderBy,
-      orderDirection: ret.orderDirection,
       skip: ret.skip,
       limit: ret.limit,
     };
@@ -734,7 +735,6 @@ class Parser {
         where,
         returnItems: ret.items,
         orderBy: ret.orderBy,
-        orderDirection: ret.orderDirection,
         skip: ret.skip,
         limit: ret.limit,
       };

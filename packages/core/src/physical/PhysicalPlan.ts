@@ -221,7 +221,9 @@ export function logicalToPhysical(
             row[aliasFor(item, idx)] = val;
             if (item.alias) aliasVars.set(item.alias, val);
           });
-          const order = plan.orderBy ? evalExpr(plan.orderBy, aliasVars, params) : undefined;
+          const order = plan.orderBy
+            ? plan.orderBy.map(o => evalExpr(o.expression, aliasVars, params))
+            : undefined;
           rows.push({ row, order, record: rec });
         };
 
@@ -312,7 +314,7 @@ export function logicalToPhysical(
               }
               group.row[aliasFor(item, idx)] = val;
             });
-            let order: any;
+            let order: any[] | undefined;
             if (plan.orderBy) {
               const aliasVars = new Map(vars);
               plan.returnItems.forEach((it, i) => {
@@ -320,7 +322,9 @@ export function logicalToPhysical(
                 aliasVars.set(alias, group.row[alias]);
                 if (it.alias) aliasVars.set(it.alias, group.row[alias]);
               });
-              order = evalExpr(plan.orderBy, aliasVars, params);
+              order = plan.orderBy.map(o =>
+                evalExpr(o.expression, aliasVars, params)
+              );
             }
             rows.push({ row: group.row, order, record: group.record });
           }
@@ -328,11 +332,17 @@ export function logicalToPhysical(
 
         if (plan.orderBy) {
           rows.sort((a, b) => {
-            if (a.order === b.order) return 0;
-            if (a.order === undefined) return 1;
-            if (b.order === undefined) return -1;
-            const cmp = a.order > b.order ? 1 : -1;
-            return plan.orderDirection === 'DESC' ? -cmp : cmp;
+            for (let i = 0; i < plan.orderBy!.length; i++) {
+              const av = a.order ? a.order[i] : undefined;
+              const bv = b.order ? b.order[i] : undefined;
+              if (av === bv) continue;
+              if (av === undefined) return 1;
+              if (bv === undefined) return -1;
+              let cmp = av > bv ? 1 : -1;
+              if (plan.orderBy![i].direction === 'DESC') cmp = -cmp;
+              return cmp;
+            }
+            return 0;
           });
         }
 
@@ -653,7 +663,9 @@ export function logicalToPhysical(
               row[aliasFor(item, idx)] = val;
               if (item.alias) aliasVars.set(item.alias, val);
             });
-            const order = plan.orderBy ? evalExpr(plan.orderBy, aliasVars, params) : undefined;
+            const order = plan.orderBy
+              ? plan.orderBy.map(o => evalExpr(o.expression, aliasVars, params))
+              : undefined;
             rows.push({ row, order });
             return;
           }
@@ -704,11 +716,17 @@ export function logicalToPhysical(
         }
         if (plan.orderBy) {
           rows.sort((a, b) => {
-            if (a.order === b.order) return 0;
-            if (a.order === undefined) return 1;
-            if (b.order === undefined) return -1;
-            const cmp = a.order > b.order ? 1 : -1;
-            return plan.orderDirection === 'DESC' ? -cmp : cmp;
+            for (let i = 0; i < plan.orderBy!.length; i++) {
+              const av = a.order ? a.order[i] : undefined;
+              const bv = b.order ? b.order[i] : undefined;
+              if (av === bv) continue;
+              if (av === undefined) return 1;
+              if (bv === undefined) return -1;
+              let cmp = av > bv ? 1 : -1;
+              if (plan.orderBy![i].direction === 'DESC') cmp = -cmp;
+              return cmp;
+            }
+            return 0;
           });
         }
         const startIdx = plan.skip ?? 0;
