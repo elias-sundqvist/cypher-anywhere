@@ -46,7 +46,7 @@ export interface MatchDeleteQuery {
 }
 
 export type Expression =
-  | { type: 'Literal'; value: string | number | boolean | unknown[] }
+  | { type: 'Literal'; value: string | number | boolean | unknown[] | null }
   | { type: 'Property'; variable: string; property: string }
   | { type: 'Variable'; name: string }
   | { type: 'Parameter'; name: string }
@@ -402,6 +402,10 @@ class Parser {
       this.pos++;
       return Number(tok.value);
     }
+    if (tok.type === 'identifier' && tok.value.toLowerCase() === 'null') {
+      this.pos++;
+      return null;
+    }
     if (tok.type === 'punct' && tok.value === '[') {
       this.pos++;
       const arr: unknown[] = [];
@@ -445,6 +449,10 @@ class Parser {
     if (tok.type === 'number') {
       this.pos++;
       return { type: 'Literal', value: Number(tok.value) };
+    }
+    if (tok.type === 'identifier' && tok.value.toLowerCase() === 'null') {
+      this.pos++;
+      return { type: 'Literal', value: null };
     }
     if (tok.type === 'punct' && tok.value === '[') {
       this.pos++;

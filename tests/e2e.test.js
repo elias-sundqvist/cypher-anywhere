@@ -781,3 +781,12 @@ runOnAdapters('RETURN star with relationship chain', async engine => {
   assert.strictEqual(out[0].m.properties.title, 'John Wick');
   assert.strictEqual(out[0].r.type, 'ACTED_IN');
 });
+
+runOnAdapters('null property values supported', async engine => {
+  let node;
+  for await (const row of engine.run('CREATE (n:NullTest {x:null}) RETURN n')) node = row.n;
+  assert.strictEqual(node.properties.x, null);
+  const out = [];
+  for await (const row of engine.run('MATCH (n:NullTest {x:null}) RETURN n')) out.push(row.n);
+  assert.strictEqual(out.length, 1);
+});
