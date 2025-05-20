@@ -33,6 +33,7 @@ export interface MergeQuery {
   labels?: string[];
   properties?: Record<string, unknown>;
   onCreateSet?: Record<string, Expression>;
+  onMatchSet?: Record<string, Expression>;
   returnVariable?: string;
 }
 
@@ -118,6 +119,7 @@ export interface MergeRelQuery {
   startVariable: string;
   endVariable: string;
   onCreateSet?: Record<string, Expression>;
+  onMatchSet?: Record<string, Expression>;
   returnVariable?: string;
 }
 
@@ -943,11 +945,14 @@ class Parser {
       this.consume('punct', '>');
       const end = this.parseMaybeNodePattern();
       let onCreate: Record<string, Expression> | undefined;
-      if (this.current()?.value === 'ON') {
+      let onMatch: Record<string, Expression> | undefined;
+      while (this.current()?.value === 'ON') {
         this.consume('keyword', 'ON');
-        this.consume('keyword', 'CREATE');
+        const which = this.consume('keyword').value;
+        if (which !== 'CREATE' && which !== 'MATCH')
+          throw new Error('Expected CREATE or MATCH');
         this.consume('keyword', 'SET');
-        onCreate = {};
+        const target: Record<string, Expression> = {};
         while (true) {
           const varName = this.parseIdentifier();
           if (varName !== relVar)
@@ -956,9 +961,11 @@ class Parser {
           const prop = this.parseIdentifier();
           this.consume('punct', '=');
           const val = this.parseValue();
-          onCreate[prop] = val;
+          target[prop] = val;
           if (!this.optional('punct', ',')) break;
         }
+        if (which === 'CREATE') onCreate = target;
+        else onMatch = target;
       }
       const ret = this.parseReturnVariable();
       if (ret && ret !== relVar) throw new Error('Parse error: return variable mismatch');
@@ -972,15 +979,19 @@ class Parser {
         endVariable: end.variable,
         returnVariable: ret,
         onCreateSet: onCreate,
+        onMatchSet: onMatch,
       };
     }
     if (!start.variable) throw new Error('Parse error: node variable required');
     let onCreate: Record<string, Expression> | undefined;
-    if (this.current()?.value === 'ON') {
+    let onMatch: Record<string, Expression> | undefined;
+    while (this.current()?.value === 'ON') {
       this.consume('keyword', 'ON');
-      this.consume('keyword', 'CREATE');
+      const which = this.consume('keyword').value;
+      if (which !== 'CREATE' && which !== 'MATCH')
+        throw new Error('Expected CREATE or MATCH');
       this.consume('keyword', 'SET');
-      onCreate = {};
+      const target: Record<string, Expression> = {};
       while (true) {
         const varName = this.parseIdentifier();
         if (varName !== start.variable)
@@ -989,9 +1000,10 @@ class Parser {
         const prop = this.parseIdentifier();
         this.consume('punct', '=');
         const val = this.parseValue();
-        onCreate[prop] = val;
+        target[prop] = val;
         if (!this.optional('punct', ',')) break;
       }
+      if (which === 'CREATE') onCreate = target; else onMatch = target;
     }
     const ret = this.parseReturnVariable();
     if (ret && ret !== start.variable) {
@@ -1003,6 +1015,7 @@ class Parser {
       labels: start.labels,
       properties: start.properties,
       onCreateSet: onCreate,
+      onMatchSet: onMatch,
       returnVariable: ret,
     };
   }

@@ -591,6 +591,13 @@ export function logicalToPhysical(
             node.properties[k] = val;
           }
         }
+        if (!created && plan.onMatchSet && adapter.updateNodeProperties) {
+          for (const [k, expr] of Object.entries(plan.onMatchSet)) {
+            const val = evalExpr(expr, vars, params);
+            await adapter.updateNodeProperties(node.id, { [k]: val });
+            node.properties[k] = val;
+          }
+        }
         if (plan.returnVariable) {
           yield { [plan.variable]: node };
         }
@@ -798,6 +805,13 @@ export function logicalToPhysical(
         vars.set(plan.relVariable, existing);
         if (created && plan.onCreateSet && adapter.updateRelationshipProperties) {
           for (const [k, expr] of Object.entries(plan.onCreateSet)) {
+            const val = evalExpr(expr, vars, params);
+            await adapter.updateRelationshipProperties(existing.id, { [k]: val });
+            existing.properties[k] = val;
+          }
+        }
+        if (!created && plan.onMatchSet && adapter.updateRelationshipProperties) {
+          for (const [k, expr] of Object.entries(plan.onMatchSet)) {
             const val = evalExpr(expr, vars, params);
             await adapter.updateRelationshipProperties(existing.id, { [k]: val });
             existing.properties[k] = val;

@@ -505,6 +505,15 @@ runOnAdapters('merge with ON CREATE SET', async engine => {
   assert.strictEqual(node.properties.flag, true);
 });
 
+runOnAdapters('merge with ON MATCH SET', async engine => {
+  let node;
+  for await (const row of engine.run("MERGE (p:TempMatch {id:1}) ON CREATE SET p.flag=false RETURN p"))
+    node = row.p;
+  for await (const row of engine.run("MERGE (p:TempMatch {id:1}) ON MATCH SET p.flag=true RETURN p"))
+    node = row.p;
+  assert.strictEqual(node.properties.flag, true);
+});
+
 runOnAdapters('create node with list property', async engine => {
   let ev;
   for await (const row of engine.run("CREATE (e:Event {tags:['neo4j','conf']}) RETURN e"))
