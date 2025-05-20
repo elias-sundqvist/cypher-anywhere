@@ -541,6 +541,15 @@ runOnAdapters('GROUP BY with COUNT', async engine => {
   assert.strictEqual(res[2014], 1);
 });
 
+runOnAdapters('ORDER BY after aggregation', async engine => {
+  for await (const _ of engine.run('CREATE (m:Movie {title:"Extra", released:2014})')) {}
+  const q =
+    'MATCH (m:Movie) RETURN m.released AS year, COUNT(m) AS cnt ORDER BY cnt DESC';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(`${row.year}:${row.cnt}`);
+  assert.deepStrictEqual(out, ['2014:2', '1999:1']);
+});
+
 runOnAdapters('UNION combines results', async engine => {
   const q =
     'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name ' +
