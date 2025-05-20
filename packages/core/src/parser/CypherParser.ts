@@ -149,7 +149,7 @@ export interface MatchChainQuery {
   };
   hops: {
     rel: {
-      variable: string;
+      variable?: string;
       type?: string;
       properties?: Record<string, unknown>;
       direction: 'out' | 'in';
@@ -160,7 +160,10 @@ export interface MatchChainQuery {
       properties?: Record<string, unknown>;
     };
   }[];
-  returnVariable: string;
+  returnItems: ReturnItem[];
+  orderBy?: Expression;
+  skip?: number;
+  limit?: number;
 }
 
 export type CypherAST =
@@ -576,7 +579,10 @@ class Parser {
         this.consume('punct', '-');
       }
       this.consume('punct', '[');
-      const relVar = this.parseIdentifier();
+      let relVar: string | undefined;
+      if (this.current()?.type === 'identifier') {
+        relVar = this.parseIdentifier();
+      }
       let relType: string | undefined;
       if (this.optional('punct', ':')) {
         relType = this.parseIdentifier();
@@ -602,8 +608,8 @@ class Parser {
       });
       current = next;
     }
-    const ret = this.parseReturnVariable();
-    if (!ret) throw new Error('Parse error: RETURN required');
+    const ret = this.parseReturnClause();
+    if (!ret.items.length) throw new Error('Parse error: RETURN required');
     return {
       type: 'MatchChain',
       start: {
@@ -612,7 +618,10 @@ class Parser {
         properties: start.properties,
       },
       hops,
-      returnVariable: ret,
+      returnItems: ret.items,
+      orderBy: ret.orderBy,
+      skip: ret.skip,
+      limit: ret.limit,
     };
   }
 
@@ -652,8 +661,10 @@ class Parser {
       const save = this.pos;
       try {
         const chain = this.parseMatchChain(start);
-        if (chain.hops.length > 1) return chain;
-        // single-hop chains are treated as simple patterns
+        const hasAnonRel = chain.hops.some(h => !h.rel.variable);
+        if (chain.hops.length > 1 || chain.returnItems.length > 1 || hasAnonRel)
+          return chain;
+        // single-hop chains with one return item and explicit rel variable are treated as simple patterns
         this.pos = save;
       } catch {
         this.pos = save;
@@ -662,7 +673,10 @@ class Parser {
     if (this.current()?.value === '-') {
       this.consume('punct', '-');
       this.consume('punct', '[');
-      const relVar = this.parseIdentifier();
+      let relVar = '';
+      if (this.current()?.type === 'identifier') {
+        relVar = this.parseIdentifier();
+      }
       let relType: string | undefined;
       if (this.optional('punct', ':')) {
         relType = this.parseIdentifier();
