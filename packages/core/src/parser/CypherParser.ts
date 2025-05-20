@@ -85,7 +85,10 @@ export type WhereClause =
         | '<>'
         | 'IN'
         | 'IS NULL'
-        | 'IS NOT NULL';
+        | 'IS NOT NULL'
+        | 'STARTS WITH'
+        | 'ENDS WITH'
+        | 'CONTAINS';
       right?: Expression;
     }
   | { type: 'And'; left: WhereClause; right: WhereClause }
@@ -246,7 +249,7 @@ function tokenize(input: string): Token[] {
       i += ws[0].length;
       continue;
     }
-    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|CALL|UNION|ALL|AND|OR|NOT|ASC|DESC|DISTINCT|IS)\b/i.exec(rest);
+    const keyword = /^(MATCH|RETURN|CREATE|MERGE|SET|DELETE|WHERE|FOREACH|IN|ON|UNWIND|AS|ORDER|BY|LIMIT|SKIP|OPTIONAL|WITH|CALL|UNION|ALL|AND|OR|NOT|ASC|DESC|DISTINCT|IS|STARTS|ENDS|CONTAINS)\b/i.exec(rest);
     if (keyword) {
       tokens.push({ type: 'keyword', value: keyword[1].toUpperCase() });
       i += keyword[0].length;
@@ -715,6 +718,23 @@ class Parser {
         this.consume('keyword', 'IN');
         const right = this.parseValue();
         return { type: 'Condition', left, operator: 'IN', right };
+      }
+      if (this.current()?.value === 'STARTS') {
+        this.consume('keyword', 'STARTS');
+        this.consume('keyword', 'WITH');
+        const right = this.parseValue();
+        return { type: 'Condition', left, operator: 'STARTS WITH', right };
+      }
+      if (this.current()?.value === 'ENDS') {
+        this.consume('keyword', 'ENDS');
+        this.consume('keyword', 'WITH');
+        const right = this.parseValue();
+        return { type: 'Condition', left, operator: 'ENDS WITH', right };
+      }
+      if (this.current()?.value === 'CONTAINS') {
+        this.consume('keyword', 'CONTAINS');
+        const right = this.parseValue();
+        return { type: 'Condition', left, operator: 'CONTAINS', right };
       }
       if (this.current()?.value === 'IS') {
         this.consume('keyword', 'IS');

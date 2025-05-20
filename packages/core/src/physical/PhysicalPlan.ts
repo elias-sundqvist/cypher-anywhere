@@ -113,6 +113,12 @@ function evalWhere(
           return l === null || l === undefined;
         case 'IS NOT NULL':
           return l !== null && l !== undefined;
+        case 'STARTS WITH':
+          return typeof l === 'string' && typeof r === 'string' && l.startsWith(r);
+        case 'ENDS WITH':
+          return typeof l === 'string' && typeof r === 'string' && l.endsWith(r);
+        case 'CONTAINS':
+          return typeof l === 'string' && typeof r === 'string' && l.includes(r);
         default:
           throw new Error('Unknown operator');
       }
