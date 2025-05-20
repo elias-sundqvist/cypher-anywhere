@@ -657,6 +657,13 @@ runOnAdapters('COUNT DISTINCT aggregation', async engine => {
   assert.strictEqual(out[0], 3);
 });
 
+runOnAdapters('COUNT DISTINCT star counts rows', async engine => {
+  const out = [];
+  const q = 'MATCH (p:Person) RETURN COUNT(DISTINCT *) AS cnt';
+  for await (const row of engine.run(q)) out.push(row.cnt);
+  assert.strictEqual(out[0], 3);
+});
+
 runOnAdapters('SUM aggregation', async engine => {
   const out = [];
   for await (const row of engine.run('MATCH (m:Movie) RETURN SUM(m.released)')) out.push(row.value);

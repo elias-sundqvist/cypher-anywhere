@@ -148,6 +148,21 @@ function evalProps(
   return out;
 }
 
+function serializeVars(vars: Map<string, any>): string {
+  const obj: Record<string, unknown> = {};
+  const entries = Array.from(vars.entries()).sort(([a], [b]) =>
+    a.localeCompare(b)
+  );
+  for (const [k, v] of entries) {
+    if (v && typeof v === 'object' && 'id' in v) {
+      obj[k] = (v as any).id;
+    } else {
+      obj[k] = v;
+    }
+  }
+  return JSON.stringify(obj);
+}
+
 function hasAgg(expr: Expression): boolean {
   switch (expr.type) {
     case 'Count':
@@ -223,7 +238,10 @@ function updateAggState(
     case 'Count': {
       const val = state.expr ? evalExpr(state.expr, vars, params) : null;
       if (state.distinct) {
-        const key = JSON.stringify(val);
+        const key =
+          state.expr === null
+            ? serializeVars(vars)
+            : JSON.stringify(val);
         if (!state.values.has(key)) {
           state.values.add(key);
           state.count++;
