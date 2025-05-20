@@ -637,6 +637,13 @@ runOnAdapters('UNION ALL preserves duplicate rows', async engine => {
   assert.deepStrictEqual(out, ['Alice', 'Alice']);
 });
 
+runOnAdapters('RETURN DISTINCT removes duplicates', async engine => {
+  const q = 'MATCH (p:Person)-[:ACTED_IN]->(m:Movie) RETURN DISTINCT m.title AS title';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.title);
+  assert.deepStrictEqual(out.sort(), ['John Wick', 'The Matrix']);
+});
+
 runOnAdapters('CALL subquery returns rows', async engine => {
   const q = 'CALL { MATCH (p:Person {name:"Alice"}) RETURN p } RETURN p';
   const out = [];
