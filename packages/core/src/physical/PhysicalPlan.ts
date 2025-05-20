@@ -141,17 +141,17 @@ export function logicalToPhysical(
         const isAgg = (e: Expression): boolean =>
           ['Count', 'Sum', 'Min', 'Max', 'Avg'].includes(e.type);
         const hasAgg = plan.returnItems.some(r => isAgg(r.expression));
-        const rows: { row: Record<string, unknown>; order?: any; node?: NodeRecord }[] = [];
+        const rows: { row: Record<string, unknown>; order?: any; record?: NodeRecord | RelRecord }[] = [];
         const aliasFor = (item: typeof plan.returnItems[number], idx: number): string => {
           if (item.alias) return item.alias;
           if (item.expression.type === 'Variable') return item.expression.name;
           return plan.returnItems.length === 1 ? 'value' : `value${idx}`;
         };
 
-        const groups = new Map<string, { row: Record<string, unknown>; aggs: any[]; node?: NodeRecord }>();
+        const groups = new Map<string, { row: Record<string, unknown>; aggs: any[]; record?: NodeRecord | RelRecord }>();
 
-        const collectAgg = async (node: NodeRecord) => {
-          vars.set(plan.variable, node);
+        const collectAgg = async (rec: NodeRecord | RelRecord) => {
+          vars.set(plan.variable, rec);
           if (plan.where && !evalWhere(plan.where, vars, params)) return;
           const keyParts: unknown[] = [];
           for (const item of plan.returnItems) {
@@ -167,7 +167,7 @@ export function logicalToPhysical(
                 row[aliasFor(item, idx)] = keyParts[i++];
               }
             });
-            group = { row, aggs: [], node };
+            group = { row, aggs: [], record: rec };
             groups.set(key, group);
           }
           plan.returnItems.forEach((item, idx) => {
@@ -205,56 +205,76 @@ export function logicalToPhysical(
           });
         };
 
-        const collectSimple = async (node: NodeRecord) => {
-          vars.set(plan.variable, node);
+        const collectSimple = async (rec: NodeRecord | RelRecord) => {
+          vars.set(plan.variable, rec);
           if (plan.where && !evalWhere(plan.where, vars, params)) return;
           const row: Record<string, unknown> = {};
           plan.returnItems.forEach((item, idx) => {
             row[aliasFor(item, idx)] = evalExpr(item.expression, vars, params);
           });
           const order = plan.orderBy ? evalExpr(plan.orderBy, vars, params) : undefined;
-          rows.push({ row, order, node });
+          rows.push({ row, order, record: rec });
         };
 
         const collect = hasAgg ? collectAgg : collectSimple;
 
-        let usedIndex = false;
-        if (
-          plan.labels &&
-          plan.labels.length > 0 &&
-          plan.properties &&
-          Object.keys(plan.properties).length === 1 &&
-          adapter.indexLookup &&
-          adapter.listIndexes
-        ) {
-          const [prop, valueExpr] = Object.entries(plan.properties)[0];
-          const value = evalPropValue(valueExpr, vars, params);
-          const indexes = await adapter.listIndexes();
-          const label = plan.labels[0];
-          const found = indexes.find(
-            i => i.label === label && i.properties.length === 1 && i.properties[0] === prop
-          );
-          if (found) {
-            for await (const node of adapter.indexLookup(label, prop, value)) {
-              await collect(node);
-            }
-            usedIndex = true;
-          }
-        }
-        if (!usedIndex) {
-          const scan = adapter.scanNodes(plan.labels ? { labels: plan.labels } : {});
-          for await (const node of scan) {
+        if (plan.isRelationship) {
+          if (!adapter.scanRelationships)
+            throw new Error('Adapter does not support MATCH');
+          for await (const rel of adapter.scanRelationships()) {
+            const label = plan.labels && plan.labels.length > 0 ? plan.labels[0] : undefined;
+            if (label && rel.type !== label) continue;
             if (plan.properties) {
               let ok = true;
               for (const [k, v] of Object.entries(plan.properties)) {
-                if (node.properties[k] !== evalPropValue(v, vars, params)) {
+                if (rel.properties[k] !== evalPropValue(v, vars, params)) {
                   ok = false;
                   break;
                 }
               }
               if (!ok) continue;
             }
-            await collect(node);
+            await collect(rel);
+          }
+        } else {
+          let usedIndex = false;
+          if (
+            plan.labels &&
+            plan.labels.length > 0 &&
+            plan.properties &&
+            Object.keys(plan.properties).length === 1 &&
+            adapter.indexLookup &&
+            adapter.listIndexes
+          ) {
+            const [prop, valueExpr] = Object.entries(plan.properties)[0];
+            const value = evalPropValue(valueExpr, vars, params);
+            const indexes = await adapter.listIndexes();
+            const label = plan.labels[0];
+            const found = indexes.find(
+              i => i.label === label && i.properties.length === 1 && i.properties[0] === prop
+            );
+            if (found) {
+              for await (const node of adapter.indexLookup(label, prop, value)) {
+                await collect(node);
+              }
+              usedIndex = true;
+            }
+          }
+          if (!usedIndex) {
+            const scan = adapter.scanNodes(plan.labels ? { labels: plan.labels } : {});
+            for await (const node of scan) {
+              if (plan.properties) {
+                let ok = true;
+                for (const [k, v] of Object.entries(plan.properties)) {
+                  if (node.properties[k] !== evalPropValue(v, vars, params)) {
+                    ok = false;
+                    break;
+                  }
+                }
+                if (!ok) continue;
+              }
+              await collect(node);
+            }
           }
         }
 
@@ -283,7 +303,7 @@ export function logicalToPhysical(
               }
               group.row[aliasFor(item, idx)] = val;
             });
-            rows.push({ row: group.row, node: group.node });
+            rows.push({ row: group.row, record: group.record });
           }
         }
 
@@ -300,7 +320,7 @@ export function logicalToPhysical(
         let end = rows.length;
         if (plan.limit !== undefined) end = Math.min(end, start + plan.limit);
         for (let i = start; i < end; i++) {
-          vars.set(plan.variable, rows[i].node as NodeRecord);
+          vars.set(plan.variable, rows[i].record as any);
           yield rows[i].row;
         }
         break;

@@ -8,6 +8,7 @@ export interface MatchReturnQuery {
   variable: string;
   labels?: string[];
   properties?: Record<string, unknown>;
+  isRelationship?: boolean;
   where?: WhereClause;
   returnItems: ReturnItem[];
   orderBy?: Expression;
@@ -709,6 +710,7 @@ class Parser {
         variable: pattern.variable,
         labels: pattern.labels,
         properties: pattern.properties,
+        isRelationship: pattern.isRel,
         where,
         returnItems: ret.items,
         orderBy: ret.orderBy,
