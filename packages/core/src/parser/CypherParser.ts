@@ -50,6 +50,7 @@ export type Expression =
   | { type: 'Variable'; name: string }
   | { type: 'Parameter'; name: string }
   | { type: 'Add'; left: Expression; right: Expression }
+  | { type: 'Sub'; left: Expression; right: Expression }
   | { type: 'Nodes'; variable: string }
   | { type: 'Count'; expression: Expression | null }
   | { type: 'Sum'; expression: Expression }
@@ -417,10 +418,12 @@ class Parser {
 
   private parseValue(): Expression {
     let left = this.parseValueAtom();
-    while (this.current()?.value === '+') {
-      this.consume('punct', '+');
+    while (this.current()?.value === '+' || this.current()?.value === '-') {
+      const op = this.current()!.value;
+      this.consume('punct', op);
       const right = this.parseValueAtom();
-      left = { type: 'Add', left, right };
+      if (op === '+') left = { type: 'Add', left, right };
+      else left = { type: 'Sub', left, right };
     }
     return left;
   }
