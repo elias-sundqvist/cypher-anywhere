@@ -67,6 +67,19 @@ test('JsonAdapter transaction rollback discards changes', async () => {
   assert.strictEqual(res.length, 0);
 });
 
+test('JsonAdapter rollback restores indexes', async () => {
+  const adapter = new JsonAdapter({
+    dataset: { nodes: [], relationships: [] },
+    indexes: [{ label: 'Person', properties: ['name'], unique: true }]
+  });
+  const tx = await adapter.beginTransaction();
+  await adapter.createNode(['Person'], { name: 'Tmp' });
+  await adapter.rollback(tx);
+  const results = [];
+  for await (const n of adapter.indexLookup('Person', 'name', 'Tmp')) results.push(n);
+  assert.strictEqual(results.length, 0);
+});
+
 test('JsonAdapter node property updates and deletion', async () => {
   const adapter = new JsonAdapter({ datasetPath });
   const node = await adapter.createNode(['Test'], { x: 1 });

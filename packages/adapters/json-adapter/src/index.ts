@@ -268,10 +268,15 @@ export class JsonAdapter implements StorageAdapter {
       this.data.nodes = this.txData.nodes;
       this.data.relationships = this.txData.relationships;
       this.txData = undefined;
+      this.buildIndexes();
     }
   }
 
   async rollback(_: TransactionCtx): Promise<void> {
-    this.txData = undefined;
+    if (this.txData) {
+      this.txData = undefined;
+      // Rebuild indexes from the untouched base data
+      this.buildIndexes();
+    }
   }
 }
