@@ -225,6 +225,20 @@ runOnAdapters('merge relationship prevents duplicates', async (engine, adapter) 
   assert.strictEqual(out.length, 3);
 });
 
+runOnAdapters('merge relationship respects properties', async (engine, adapter) => {
+  const script = 'MATCH (p:Person {name:"Alice"}) RETURN p; MATCH (m:Movie {title:"The Matrix"}) RETURN m; MERGE (p)-[r:ACTED_IN {role:"Villain"}]->(m) RETURN r';
+  for await (const _ of engine.run(script)) {}
+  const roles = [];
+  for await (const rel of adapter.scanRelationships()) {
+    if (rel.type === 'ACTED_IN' && rel.startNode === 1 && rel.endNode === 3) {
+      roles.push(rel.properties.role);
+    }
+  }
+  roles.sort();
+  assert.deepStrictEqual(roles, ['Neo', 'Villain']);
+});
+
+
 runOnAdapters('relationship deleted is gone', async engine => {
   for await (const _ of engine.run('MATCH ()-[r:ACTED_IN {role:"Buddy"}]->() DELETE r')) {}
   const out = [];
