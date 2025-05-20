@@ -513,6 +513,15 @@ runOnAdapters('ORDER BY DESC', async engine => {
   assert.deepStrictEqual(out, [2014, 1999]);
 });
 
+runOnAdapters('ORDER BY multiple expressions', async engine => {
+  for await (const _ of engine.run('CREATE (m:Movie {title:"Extra", released:2014})')) {}
+  const q =
+    'MATCH (m:Movie) RETURN m.released AS year, m.title AS title ORDER BY year DESC, title ASC';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(`${row.year}-${row.title}`);
+  assert.deepStrictEqual(out, ['2014-Extra', '2014-John Wick', '1999-The Matrix']);
+});
+
 runOnAdapters('RETURN multiple expressions with aliases', async engine => {
   const q = 'MATCH (m:Movie) RETURN m.title AS title, m.released AS year ORDER BY year';
   const out = [];
