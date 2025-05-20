@@ -56,7 +56,7 @@ export interface ReturnQuery {
 }
 
 export type Expression =
-  | { type: 'Literal'; value: string | number | boolean | unknown[] }
+  | { type: 'Literal'; value: string | number | boolean | unknown[] | null }
   | { type: 'Property'; variable: string; property: string }
   | { type: 'Variable'; name: string }
   | { type: 'Parameter'; name: string }
@@ -440,8 +440,12 @@ class Parser {
       this.pos++;
       return { __param: tok.value };
     }
-    if (tok.type === 'identifier' && (tok.value === 'true' || tok.value === 'false')) {
+    if (
+      tok.type === 'identifier' &&
+      (tok.value === 'true' || tok.value === 'false' || tok.value === 'null')
+    ) {
       this.pos++;
+      if (tok.value === 'null') return null;
       return tok.value === 'true';
     }
     throw new Error('Unexpected value');
@@ -495,8 +499,9 @@ class Parser {
       return { type: 'Parameter', name: tok.value };
     }
     if (tok.type === 'identifier') {
-      if (tok.value === 'true' || tok.value === 'false') {
+      if (tok.value === 'true' || tok.value === 'false' || tok.value === 'null') {
         this.pos++;
+        if (tok.value === 'null') return { type: 'Literal', value: null };
         return { type: 'Literal', value: tok.value === 'true' };
       }
       const func = tok.value.toLowerCase();

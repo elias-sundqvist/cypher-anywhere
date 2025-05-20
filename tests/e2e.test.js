@@ -854,3 +854,14 @@ runOnAdapters('standalone RETURN expression', async engine => {
   for await (const row of engine.run('RETURN 42 AS val')) out.push(row.val);
   assert.deepStrictEqual(out, [42]);
 });
+
+runOnAdapters('NULL literal handled in create and match', async engine => {
+  let node;
+  for await (const row of engine.run('CREATE (n:NullTest {v:null}) RETURN n'))
+    node = row.n;
+  assert.strictEqual(node.properties.v, null);
+  const out = [];
+  for await (const row of engine.run('MATCH (n:NullTest) WHERE n.v = null RETURN n'))
+    out.push(row.n);
+  assert.strictEqual(out.length, 1);
+});
