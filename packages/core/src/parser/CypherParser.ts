@@ -254,7 +254,12 @@ function tokenize(input: string): Token[] {
 
 class Parser {
   private pos = 0;
+  private anonId = 0;
   constructor(private tokens: Token[]) {}
+
+  private genAnonVar(): string {
+    return `_anon${this.anonId++}`;
+  }
 
   private current(): Token | undefined {
     return this.tokens[this.pos];
@@ -638,9 +643,14 @@ class Parser {
     labels?: string[];
     properties?: Record<string, unknown>;
   }): MatchChainQuery {
-    if (!start.variable) throw new Error('Parse error: node variable required');
+    const startVar = start.variable ?? this.genAnonVar();
+    const startNode = {
+      variable: startVar,
+      labels: start.labels,
+      properties: start.properties,
+    };
     const hops: MatchChainQuery['hops'] = [];
-    let current = start;
+    let current = startNode;
     while (this.current()?.value === '-' || this.current()?.value === '<') {
       let direction: 'out' | 'in' | 'none' = 'out';
       if (this.current()?.value === '<') {
@@ -673,26 +683,23 @@ class Parser {
           direction = 'none';
         }
       }
-      const next = this.parseNodePattern();
+      const next = this.parseMaybeNodePattern();
+      const nodeVar = next.variable ?? this.genAnonVar();
       hops.push({
         rel: { variable: relVar, type: relType, properties: relProps, direction },
         node: {
-          variable: next.variable,
+          variable: nodeVar,
           labels: next.labels,
           properties: next.properties,
         },
       });
-      current = next;
+      current = { variable: nodeVar, labels: next.labels, properties: next.properties };
     }
     const ret = this.parseReturnClause();
     if (!ret.items.length) throw new Error('Parse error: RETURN required');
     return {
       type: 'MatchChain',
-      start: {
-        variable: start.variable,
-        labels: start.labels,
-        properties: start.properties,
-      },
+      start: startNode,
       hops,
       returnItems: ret.items,
       orderBy: ret.orderBy,
@@ -731,10 +738,7 @@ class Parser {
     }
     let pattern: { variable: string; labels?: string[]; properties?: Record<string, unknown>; isRel?: boolean };
     const start = this.parseMaybeNodePattern();
-    if (
-      start.variable &&
-      (this.current()?.value === '-' || this.current()?.value === '<')
-    ) {
+    if (this.current()?.value === '-' || this.current()?.value === '<') {
       const save = this.pos;
       try {
         const chain = this.parseMatchChain(start);
