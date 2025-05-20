@@ -949,19 +949,24 @@ export function logicalToPhysical(
         const rows: { row: Record<string, unknown>; order?: any }[] = [];
         const groups = new Map<string, { row: Record<string, unknown>; aggs: (AggState | null)[] }>();
         const startNodes: NodeRecord[] = [];
-        for await (const node of adapter.scanNodes(
-          plan.start.labels ? { labels: plan.start.labels } : {}
-        )) {
-          let ok = true;
-          if (plan.start.properties) {
-            for (const [k, v] of Object.entries(plan.start.properties)) {
-              if (node.properties[k] !== evalPropValue(v, vars, params)) {
-                ok = false;
-                break;
+        const boundStart = vars.get(plan.start.variable) as NodeRecord | undefined;
+        if (boundStart) {
+          startNodes.push(boundStart);
+        } else {
+          for await (const node of adapter.scanNodes(
+            plan.start.labels ? { labels: plan.start.labels } : {}
+          )) {
+            let ok = true;
+            if (plan.start.properties) {
+              for (const [k, v] of Object.entries(plan.start.properties)) {
+                if (node.properties[k] !== evalPropValue(v, vars, params)) {
+                  ok = false;
+                  break;
+                }
               }
             }
+            if (ok) startNodes.push(node);
           }
-          if (ok) startNodes.push(node);
         }
         const traverse = async (
           node: NodeRecord,
@@ -1175,6 +1180,26 @@ export function logicalToPhysical(
             yield { [plan.variable]: val };
           } else {
             yield { value: val };
+          }
+        }
+        break;
+      }
+      case 'With': {
+        const left = logicalToPhysical(plan.source, adapter);
+        const right = logicalToPhysical(plan.next, adapter);
+        const aliasFor = (item: typeof plan.source.returnItems[number], idx: number): string => {
+          if (item.alias) return item.alias;
+          if (item.expression.type === 'Variable') return item.expression.name;
+          return plan.source.returnItems.length === 1 ? 'value' : `value${idx}`;
+        };
+        for await (const row of left(new Map(vars), params)) {
+          const local = new Map(vars);
+          plan.source.returnItems.forEach((item, idx) => {
+            const alias = aliasFor(item, idx);
+            local.set(alias, (row as any)[alias]);
+          });
+          for await (const out of right(local, params)) {
+            yield out;
           }
         }
         break;

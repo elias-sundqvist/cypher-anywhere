@@ -9,6 +9,7 @@ import {
   MergeRelQuery,
   MatchPathQuery,
   MatchChainQuery,
+  WithQuery,
   ForeachQuery,
   UnwindQuery,
   UnionQuery,
@@ -29,6 +30,7 @@ export type LogicalPlan =
   | LogicalMergeRel
   | LogicalMatchPath
   | LogicalMatchChain
+  | LogicalWith
   | LogicalForeach
   | LogicalUnwind
   | LogicalUnion
@@ -43,6 +45,7 @@ export type LogicalCreateRel = CreateRelQuery;
 export type LogicalMergeRel = MergeRelQuery;
 export type LogicalMatchPath = MatchPathQuery;
 export type LogicalMatchChain = MatchChainQuery;
+export type LogicalWith = WithQuery;
 export type LogicalForeach = ForeachQuery;
 export type LogicalUnwind = UnwindQuery;
 export type LogicalUnion = UnionQuery;

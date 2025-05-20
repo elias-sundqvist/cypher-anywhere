@@ -207,6 +207,12 @@ export interface MatchChainQuery {
   distinct?: boolean;
 }
 
+export interface WithQuery {
+  type: 'With';
+  source: MatchReturnQuery;
+  next: CypherAST;
+}
+
 export type CypherAST =
   | MatchReturnQuery
   | ReturnQuery
@@ -218,6 +224,7 @@ export type CypherAST =
   | MergeRelQuery
   | MatchPathQuery
   | MatchChainQuery
+  | WithQuery
   | ForeachQuery
   | UnwindQuery
   | UnionQuery
@@ -629,6 +636,54 @@ class Parser {
     return { items, orderBy, skip, limit, distinct };
   }
 
+  private parseWithClause(): {
+    items: ReturnItem[];
+    orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
+    skip?: Expression;
+    limit?: Expression;
+    distinct?: boolean;
+  } {
+    this.consume('keyword', 'WITH');
+    const distinct = this.optional('keyword', 'DISTINCT') !== null;
+    const items: ReturnItem[] = [];
+    while (true) {
+      const expr = this.parseValue();
+      let alias: string | undefined;
+      if (this.optional('keyword', 'AS')) {
+        alias = this.parseIdentifier();
+      }
+      items.push({ expression: expr, alias });
+      if (!this.optional('punct', ',')) break;
+    }
+    let orderBy: { expression: Expression; direction?: 'ASC' | 'DESC' }[] | undefined;
+    if (this.current()?.value === 'ORDER') {
+      this.consume('keyword', 'ORDER');
+      this.consume('keyword', 'BY');
+      orderBy = [];
+      while (true) {
+        const expr = this.parseValue();
+        let direction: 'ASC' | 'DESC' | undefined;
+        if (this.current()?.value === 'ASC' || this.current()?.value === 'DESC') {
+          direction = this.current()!.value as 'ASC' | 'DESC';
+          this.consume('keyword');
+        }
+        orderBy.push({ expression: expr, direction });
+        if (!this.optional('punct', ',')) break;
+      }
+    }
+    let skip: Expression | undefined;
+    if (this.current()?.value === 'SKIP') {
+      this.consume('keyword', 'SKIP');
+      skip = this.parseValue();
+    }
+    let limit: Expression | undefined;
+    if (this.current()?.value === 'LIMIT') {
+      this.consume('keyword', 'LIMIT');
+      limit = this.parseValue();
+    }
+    return { items, orderBy, skip, limit, distinct };
+  }
+
   private parseReturnOnly(): ReturnQuery {
     const ret = this.parseReturnClause();
     return {
@@ -921,6 +976,25 @@ class Parser {
         returnVariable: ret,
         where,
       };
+    }
+    if (next.value === 'WITH') {
+      const withClause = this.parseWithClause();
+      const source: MatchReturnQuery = {
+        type: 'MatchReturn',
+        variable: pattern.variable,
+        labels: pattern.labels,
+        properties: pattern.properties,
+        isRelationship: pattern.isRel,
+        optional,
+        where,
+        returnItems: withClause.items,
+        orderBy: withClause.orderBy,
+        skip: withClause.skip,
+        limit: withClause.limit,
+        distinct: withClause.distinct,
+      };
+      const nextStmt = this.parse();
+      return { type: 'With', source, next: nextStmt };
     }
     throw new Error('Parse error: unsupported MATCH clause');
   }

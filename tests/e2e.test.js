@@ -912,3 +912,11 @@ runOnAdapters('NULL literal handled in create and match', async engine => {
     out.push(row.n);
   assert.strictEqual(out.length, 1);
 });
+
+runOnAdapters('WITH passes variable to subsequent MATCH', async engine => {
+  const q =
+    'MATCH (p:Person {name:"Alice"}) WITH p MATCH (p)-[:ACTED_IN]->(m) RETURN m.title AS title';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.title);
+  assert.deepStrictEqual(out.sort(), ['John Wick', 'The Matrix']);
+});
