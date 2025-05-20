@@ -1,6 +1,7 @@
 import {
   CypherAST,
   MatchReturnQuery,
+  MatchMultiReturnQuery,
   CreateQuery,
   MergeQuery,
   MatchDeleteQuery,
@@ -21,6 +22,7 @@ import {
 // so that optimizers can operate on them before physical compilation.
 export type LogicalPlan =
   | LogicalMatchReturn
+  | LogicalMatchMultiReturn
   | LogicalReturn
   | LogicalCreate
   | LogicalMerge
@@ -37,6 +39,7 @@ export type LogicalPlan =
   | LogicalCall;
 
 export type LogicalMatchReturn = MatchReturnQuery;
+export type LogicalMatchMultiReturn = MatchMultiReturnQuery;
 export type LogicalCreate = CreateQuery;
 export type LogicalMerge = MergeQuery;
 export type LogicalMatchDelete = MatchDeleteQuery;
