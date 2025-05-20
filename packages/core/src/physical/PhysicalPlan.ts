@@ -31,6 +31,7 @@ function evalExpr(
     case 'Add':
       const l = evalExpr(expr.left, vars, params);
       const r = evalExpr(expr.right, vars, params);
+      if (l == null || r == null) return null;
       if (typeof l === 'number' && typeof r === 'number') {
         return l + r;
       }
@@ -38,6 +39,7 @@ function evalExpr(
     case 'Sub': {
       const l = evalExpr(expr.left, vars, params);
       const r = evalExpr(expr.right, vars, params);
+      if (l == null || r == null) return null;
       if (typeof l === 'number' && typeof r === 'number') {
         return l - r;
       }
@@ -46,6 +48,7 @@ function evalExpr(
     case 'Mul': {
       const l = evalExpr(expr.left, vars, params);
       const r = evalExpr(expr.right, vars, params);
+      if (l == null || r == null) return null;
       if (typeof l === 'number' && typeof r === 'number') {
         return l * r;
       }
@@ -54,6 +57,7 @@ function evalExpr(
     case 'Div': {
       const l = evalExpr(expr.left, vars, params);
       const r = evalExpr(expr.right, vars, params);
+      if (l == null || r == null) return null;
       if (typeof l === 'number' && typeof r === 'number') {
         return l / r;
       }
@@ -61,6 +65,7 @@ function evalExpr(
     }
     case 'Neg': {
       const v = evalExpr(expr.expression, vars, params);
+      if (v == null) return null;
       return typeof v === 'number' ? -v : NaN;
     }
     case 'Nodes':
