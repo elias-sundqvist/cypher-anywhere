@@ -176,6 +176,7 @@ export interface MatchPathQuery {
     labels?: string[];
     properties?: Record<string, unknown>;
   };
+  relType?: string;
   minHops?: number;
   maxHops?: number;
   direction?: 'out' | 'in' | 'none';
@@ -966,6 +967,10 @@ class Parser {
         this.consume('punct', '-');
       }
       this.consume('punct', '[');
+      let relType: string | undefined;
+      if (this.optional('punct', ':')) {
+        relType = this.parseIdentifier();
+      }
       this.consume('punct', '*');
       let minHops: number | undefined;
       let maxHops: number | undefined;
@@ -1009,6 +1014,7 @@ class Parser {
         pathVariable,
         start: { variable: start.variable, labels: start.labels, properties: start.properties },
         end: { variable: end.variable, labels: end.labels, properties: end.properties },
+        relType,
         minHops,
         maxHops,
         direction,

@@ -83,13 +83,17 @@ async function findPath(
   endId: number | string,
   minHops = 1,
   maxHops = Infinity,
-  direction: 'out' | 'in' | 'none' = 'out'
+  direction: 'out' | 'in' | 'none' = 'out',
+  relType?: string
 ): Promise<NodeRecord[] | null> {
   if (!adapter.scanRelationships || !adapter.getNodeById) {
     throw new Error('Adapter does not support path finding');
   }
   const rels: RelRecord[] = [];
-  for await (const r of adapter.scanRelationships()) rels.push(r);
+  for await (const r of adapter.scanRelationships()) {
+    if (relType && r.type !== relType) continue;
+    rels.push(r);
+  }
   const queue: (Array<number | string>)[] = [[startId]];
   const visited = new Set<string>([`${startId}:0`]);
   while (queue.length > 0) {
@@ -1219,7 +1223,8 @@ export function logicalToPhysical(
               e.id,
               plan.minHops ?? 1,
               plan.maxHops ?? Infinity,
-              plan.direction ?? 'out'
+              plan.direction ?? 'out',
+              plan.relType
             );
             if (!path) continue;
             vars.set(plan.pathVariable, path);
