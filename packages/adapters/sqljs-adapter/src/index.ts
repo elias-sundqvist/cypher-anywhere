@@ -5,7 +5,8 @@ import {
   NodeScanSpec,
   TransactionCtx,
   IndexMetadata,
-  parseMany
+  parseMany,
+  MatchReturnQuery
 } from '@cypher-anywhere/core';
 import type * as fsType from 'fs';
 import initSqlJs, { Database } from 'sql.js';
@@ -259,31 +260,31 @@ export class SqlJsAdapter implements StorageAdapter {
     if (asts.length !== 1) return null;
     const ast = asts[0];
     if (ast.type !== 'MatchReturn') return null;
+    const matchAst = ast as MatchReturnQuery;
     if (
-      ast.isRelationship ||
-      (ast.labels && ast.labels.length > 1) ||
-      ast.where ||
+      matchAst.isRelationship ||
+      (matchAst.labels && matchAst.labels.length > 1) ||
       ast.orderBy ||
       ast.skip ||
       ast.limit ||
       ast.optional
     )
       return null;
-    if (ast.returnItems.length !== 1) return null;
-    const ret = ast.returnItems[0];
+    if (matchAst.returnItems.length !== 1) return null;
+    const ret = matchAst.returnItems[0];
     if (ret.expression.type !== 'Variable') return null;
     const alias = ret.alias || ret.expression.name;
-    if (ast.variable !== ret.expression.name) return null;
+    if (matchAst.variable !== ret.expression.name) return null;
 
     let sql = 'SELECT id, labels, properties FROM nodes';
     const paramsArr: any[] = [];
     const conds: string[] = [];
-    if (ast.labels && ast.labels.length === 1) {
+    if (matchAst.labels && matchAst.labels.length === 1) {
       conds.push('labels LIKE ?');
-      paramsArr.push(`%"${ast.labels[0]}"%`);
+      paramsArr.push(`%"${matchAst.labels[0]}"%`);
     }
-    if (ast.properties) {
-      for (const [k, v] of Object.entries(ast.properties)) {
+    if (matchAst.properties) {
+      for (const [k, v] of Object.entries(matchAst.properties)) {
         const val =
           v && typeof v === 'object' && 'type' in v
             ? v.type === 'Literal'
@@ -292,8 +293,55 @@ export class SqlJsAdapter implements StorageAdapter {
               ? params[(v as any).name]
               : undefined
             : v;
+        if (val === null) {
+          conds.push(`json_extract(properties, '$.${k}') IS NULL`);
+        } else {
+          conds.push(`json_extract(properties, '$.${k}') = ?`);
+          paramsArr.push(val);
+        }
+      }
+    }
+
+    function extractWhere(
+      where: any
+    ): [string, any][] | null {
+      if (!where) return [];
+      if (where.type === 'Condition') {
+        if (
+          where.operator === '=' &&
+          where.left.type === 'Property' &&
+          where.left.variable === matchAst.variable &&
+          where.right
+        ) {
+          const prop = where.left.property;
+          const val =
+            where.right.type === 'Literal'
+              ? where.right.value
+              : where.right.type === 'Parameter'
+              ? params[where.right.name]
+              : undefined;
+          if (val === undefined) return null;
+          return [[prop, val]];
+        }
+        return null;
+      }
+      if (where.type === 'And') {
+        const l = extractWhere(where.left);
+        const r = extractWhere(where.right);
+        if (!l || !r) return null;
+        return [...l, ...r];
+      }
+      return null;
+    }
+
+    const whereConds = extractWhere(matchAst.where);
+    if (whereConds === null) return null;
+    for (const [k, v] of whereConds) {
+      if (v === null) {
+        conds.push(`json_extract(properties, '$.${k}') IS NULL`);
+      } else {
         conds.push(`json_extract(properties, '$.${k}') = ?`);
-        paramsArr.push(val);
+        paramsArr.push(v);
       }
     }
     if (conds.length > 0) sql += ' WHERE ' + conds.join(' AND ');
