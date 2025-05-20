@@ -310,6 +310,12 @@ runOnAdapters('match relationship with WHERE', async engine => {
   assert.strictEqual(out[0].properties.flag, true);
 });
 
+runOnAdapters('match all ACTED_IN relationships', async engine => {
+  const out = [];
+  for await (const row of engine.run('MATCH ()-[r:ACTED_IN]->() RETURN r')) out.push(row.r);
+  assert.strictEqual(out.length, 3);
+});
+
 runOnAdapters('match with WHERE using AND', async engine => {
   const out = [];
   for await (const row of engine.run('MATCH (n:Person) WHERE n.name = "Alice" AND n.name = "Bob" RETURN n')) out.push(row.n);
