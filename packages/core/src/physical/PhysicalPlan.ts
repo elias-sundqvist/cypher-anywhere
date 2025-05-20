@@ -14,6 +14,8 @@ function evalExpr(
   switch (expr.type) {
     case 'Literal':
       return expr.value;
+    case 'List':
+      return expr.items.map(i => evalExpr(i, vars, params));
     case 'Property': {
       const rec = vars.get(expr.variable) as NodeRecord | RelRecord | undefined;
       if (!rec) return undefined;
@@ -1595,13 +1597,8 @@ export function logicalToPhysical(
       }
       case 'Foreach': {
         const innerPlan = logicalToPhysical(plan.statement, adapter);
-        let items: unknown[];
-        if (Array.isArray(plan.list)) {
-          items = plan.list;
-        } else {
-          const v = evalExpr(plan.list, vars, params);
-          items = Array.isArray(v) ? v : [];
-        }
+        let items = evalExpr(plan.list, vars, params);
+        items = Array.isArray(items) ? items : [];
         for (const item of items) {
           vars.set(plan.variable, item);
           for await (const row of innerPlan(vars, params)) {
@@ -1612,13 +1609,8 @@ export function logicalToPhysical(
         break;
       }
       case 'Unwind': {
-        let items: unknown[];
-        if (Array.isArray(plan.list)) {
-          items = plan.list;
-        } else {
-          const v = evalExpr(plan.list, vars, params);
-          items = Array.isArray(v) ? v : [];
-        }
+        let items = evalExpr(plan.list, vars, params);
+        items = Array.isArray(items) ? items : [];
         for (const item of items) {
           vars.set(plan.variable, item);
           const val = evalExpr(plan.returnExpression, vars, params);
