@@ -1224,3 +1224,17 @@ runOnAdapters('MATCH without variable returns count', async engine => {
   for await (const row of engine.run(q)) out.push(row.cnt);
   assert.deepStrictEqual(out, [3]);
 });
+
+runOnAdapters('length() on list expression returns length', async engine => {
+  const q = 'RETURN length([1,2,3]) AS len';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.len);
+  assert.deepStrictEqual(out, [3]);
+});
+
+runOnAdapters('length() on string expression returns length', async engine => {
+  const q = "RETURN length('abc') AS len";
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.len);
+  assert.deepStrictEqual(out, [3]);
+});
