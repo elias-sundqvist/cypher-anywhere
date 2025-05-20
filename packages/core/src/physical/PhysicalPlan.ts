@@ -59,6 +59,10 @@ function evalExpr(
       }
       return NaN;
     }
+    case 'Neg': {
+      const v = evalExpr(expr.expression, vars, params);
+      return typeof v === 'number' ? -v : NaN;
+    }
     case 'Nodes':
       {
         const val = vars.get(expr.variable);
@@ -266,6 +270,8 @@ function hasAgg(expr: Expression): boolean {
     case 'Mul':
     case 'Div':
       return hasAgg(expr.left) || hasAgg(expr.right);
+    case 'Neg':
+      return hasAgg(expr.expression);
     default:
       return false;
   }
@@ -303,7 +309,8 @@ type AggState =
       values: unknown[];
       seen: Set<string>;
     }
-  | { type: 'Add' | 'Sub' | 'Mul' | 'Div'; left: AggState | null; right: AggState | null };
+  | { type: 'Add' | 'Sub' | 'Mul' | 'Div'; left: AggState | null; right: AggState | null }
+  | { type: 'Neg'; inner: AggState | null };
 
 function initAggState(expr: Expression): AggState | null {
   switch (expr.type) {
@@ -322,6 +329,16 @@ function initAggState(expr: Expression): AggState | null {
       const left = initAggState(expr.left);
       const right = initAggState(expr.right);
       return left || right ? { type: expr.type, left, right } : null;
+    }
+    case 'Mul':
+    case 'Div': {
+      const left = initAggState(expr.left);
+      const right = initAggState(expr.right);
+      return left || right ? { type: expr.type, left, right } : null;
+    }
+    case 'Neg': {
+      const inner = initAggState(expr.expression);
+      return inner ? { type: 'Neg', inner } : null;
     }
     default:
       return null;
@@ -416,6 +433,9 @@ function updateAggState(
       updateAggState((expr as any).left, state.left, vars, params);
       updateAggState((expr as any).right, state.right, vars, params);
       break;
+    case 'Neg':
+      updateAggState((expr as any).expression, state.inner, vars, params);
+      break;
   }
 }
 
@@ -446,6 +466,8 @@ function finalizeAgg(
         finalizeAgg((expr as any).left, state ? (state as any).left : null, vars, params) /
         finalizeAgg((expr as any).right, state ? (state as any).right : null, vars, params)
       );
+    case 'Neg':
+      return -finalizeAgg((expr as any).expression, state ? (state as any).inner : null, vars, params);
     case 'Count':
       return state ? (state as any).count : 0;
     case 'Sum':
