@@ -1,4 +1,4 @@
-import { LogicalPlan } from '../logical/LogicalPlan';
+import { LogicalPlan, astToLogical } from '../logical/LogicalPlan';
 import {
   StorageAdapter,
   NodeRecord,
@@ -680,6 +680,45 @@ export function logicalToPhysical(
             yield { [plan.variable]: val };
           } else {
             yield { value: val };
+          }
+        }
+        break;
+      }
+      case 'Union': {
+        const left = logicalToPhysical(plan.left, adapter);
+        for await (const row of left(new Map(vars), params)) {
+          yield row;
+        }
+        const right = logicalToPhysical(plan.right, adapter);
+        for await (const row of right(new Map(vars), params)) {
+          yield row;
+        }
+        break;
+      }
+      case 'Call': {
+        const innerPlans = plan.subquery.map(q =>
+          logicalToPhysical(astToLogical(q), adapter)
+        );
+        const local = new Map(vars);
+        for (let i = 0; i < innerPlans.length; i++) {
+          const p = innerPlans[i];
+          let idx = 0;
+          for await (const _row of p(local, params)) {
+            idx++;
+            if (i === innerPlans.length - 1) {
+              const out: Record<string, unknown> = {};
+              plan.returnItems.forEach((item, ridx) => {
+                const alias =
+                  item.alias ||
+                  (item.expression.type === 'Variable'
+                    ? item.expression.name
+                    : plan.returnItems.length === 1
+                    ? 'value'
+                    : `value${ridx}`);
+                out[alias] = evalExpr(item.expression, local, params);
+              });
+              yield out;
+            }
           }
         }
         break;
