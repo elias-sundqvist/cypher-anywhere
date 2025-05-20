@@ -13,12 +13,14 @@ import {
   UnwindQuery,
   UnionQuery,
   CallQuery,
+  ReturnQuery,
 } from '../parser/CypherParser';
 
 // Logical plan nodes mirror the parsed AST for now but live in a separate layer
 // so that optimizers can operate on them before physical compilation.
 export type LogicalPlan =
   | LogicalMatchReturn
+  | LogicalReturn
   | LogicalCreate
   | LogicalMerge
   | LogicalMatchDelete
@@ -45,6 +47,7 @@ export type LogicalForeach = ForeachQuery;
 export type LogicalUnwind = UnwindQuery;
 export type LogicalUnion = UnionQuery;
 export type LogicalCall = CallQuery;
+export type LogicalReturn = ReturnQuery;
 
 export function astToLogical(ast: CypherAST): LogicalPlan {
   // In this MVP the AST shape already matches the logical plan

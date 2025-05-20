@@ -825,3 +825,9 @@ runOnAdapters('id() on relationship returns rel id', async engine => {
   for await (const row of engine.run(q)) out.push(row.id);
   assert.deepStrictEqual(out, [7]);
 });
+
+runOnAdapters('standalone RETURN expression', async engine => {
+  const out = [];
+  for await (const row of engine.run('RETURN 42 AS val')) out.push(row.val);
+  assert.deepStrictEqual(out, [42]);
+});

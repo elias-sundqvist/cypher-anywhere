@@ -45,6 +45,15 @@ export interface MatchDeleteQuery {
   where?: WhereClause;
 }
 
+export interface ReturnQuery {
+  type: 'Return';
+  returnItems: ReturnItem[];
+  orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
+  skip?: Expression;
+  limit?: Expression;
+  distinct?: boolean;
+}
+
 export type Expression =
   | { type: 'Literal'; value: string | number | boolean | unknown[] }
   | { type: 'Property'; variable: string; property: string }
@@ -183,6 +192,7 @@ export interface MatchChainQuery {
 
 export type CypherAST =
   | MatchReturnQuery
+  | ReturnQuery
   | CreateQuery
   | MergeQuery
   | MatchDeleteQuery
@@ -298,6 +308,7 @@ class Parser {
     if (tok.value === 'FOREACH') return this.parseForeach();
     if (tok.value === 'UNWIND') return this.parseUnwind();
     if (tok.value === 'CALL') return this.parseCall();
+    if (tok.value === 'RETURN') return this.parseReturnOnly();
     throw new Error('Parse error: unsupported query');
   }
 
@@ -586,6 +597,18 @@ class Parser {
       limit = this.parseValue();
     }
     return { items, orderBy, skip, limit, distinct };
+  }
+
+  private parseReturnOnly(): ReturnQuery {
+    const ret = this.parseReturnClause();
+    return {
+      type: 'Return',
+      returnItems: ret.items,
+      orderBy: ret.orderBy,
+      skip: ret.skip,
+      limit: ret.limit,
+      distinct: ret.distinct,
+    };
   }
 
   private parseWhereClause(): WhereClause {
