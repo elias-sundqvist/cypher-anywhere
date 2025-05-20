@@ -716,6 +716,14 @@ runOnAdapters('ORDER BY after aggregation', async engine => {
   assert.deepStrictEqual(out, ['2014:2', '1999:1']);
 });
 
+runOnAdapters('COUNT on relationship chain', async engine => {
+  const q =
+    'MATCH (p:Person)-[:ACTED_IN]->(m:Movie) RETURN p.name AS name, COUNT(m) AS cnt ORDER BY cnt DESC';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(`${row.name}:${row.cnt}`);
+  assert.deepStrictEqual(out, ['Alice:2', 'Bob:1']);
+});
+
 runOnAdapters('UNION combines results', async engine => {
   const q =
     'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name ' +
