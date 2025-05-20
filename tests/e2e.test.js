@@ -575,6 +575,17 @@ runOnAdapters('typed variable length path', async engine => {
   assert.deepStrictEqual(out, [1]);
 });
 
+runOnAdapters('variable length path returns multiple paths', async engine => {
+  const setup =
+    'MATCH (m:Movie {title:"John Wick"}) RETURN m; MATCH (g:Genre {name:"Action"}) RETURN g; MERGE (m)-[:IN_GENRE]->(g)';
+  for await (const _ of engine.run(setup)) {}
+  const q =
+    'MATCH p=(a:Person {name:"Alice"})-[*]->(g:Genre {name:"Action"}) RETURN length(p) AS len';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.len);
+  assert.deepStrictEqual(out.sort(), [2, 2]);
+});
+
 runOnAdapters('multi-hop ->()-> chain returns final node', async engine => {
   const out = [];
   const q =
