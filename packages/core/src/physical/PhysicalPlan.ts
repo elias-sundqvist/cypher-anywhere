@@ -1454,6 +1454,9 @@ export function logicalToPhysical(
             const alias = aliasFor(item, idx);
             local.set(alias, (row as any)[alias]);
           });
+          if (plan.where && !evalWhere(plan.where, local, params)) {
+            continue;
+          }
           for await (const out of right(local, params)) {
             yield out;
           }

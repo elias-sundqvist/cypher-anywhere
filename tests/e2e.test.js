@@ -1023,3 +1023,10 @@ runOnAdapters('top-level WITH returns value', async engine => {
   for await (const row of engine.run('WITH 1 AS x RETURN x')) out.push(row.x);
   assert.deepStrictEqual(out, [1]);
 });
+runOnAdapters('WITH with WHERE filters rows', async engine => {
+  const q = 'MATCH (p:Person) WITH p WHERE p.name = "Alice" RETURN p';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.p);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Alice');
+});

@@ -241,6 +241,7 @@ export interface MatchChainQuery {
 export interface WithQuery {
   type: 'With';
   source: MatchReturnQuery | MatchChainQuery | ReturnQuery;
+  where?: WhereClause;
   next: CypherAST;
 }
 
@@ -379,7 +380,7 @@ class Parser {
         distinct: withClause.distinct,
       };
       const next = this.parse();
-      return { type: 'With', source, next };
+      return { type: 'With', source, where: withClause.where, next };
     }
     if (tok.value === 'RETURN') return this.parseReturnOnly();
     throw new Error('Parse error: unsupported query');
@@ -691,6 +692,7 @@ class Parser {
 
   private parseWithClause(): {
     items: ReturnItem[];
+    where?: WhereClause;
     orderBy?: { expression: Expression; direction?: 'ASC' | 'DESC' }[];
     skip?: Expression;
     limit?: Expression;
@@ -707,6 +709,11 @@ class Parser {
       }
       items.push({ expression: expr, alias });
       if (!this.optional('punct', ',')) break;
+    }
+    let where: WhereClause | undefined;
+    if (this.current()?.value === 'WHERE') {
+      this.consume('keyword', 'WHERE');
+      where = this.parseWhereClause();
     }
     let orderBy: { expression: Expression; direction?: 'ASC' | 'DESC' }[] | undefined;
     if (this.current()?.value === 'ORDER') {
@@ -734,7 +741,7 @@ class Parser {
       this.consume('keyword', 'LIMIT');
       limit = this.parseValue();
     }
-    return { items, orderBy, skip, limit, distinct };
+    return { items, where, orderBy, skip, limit, distinct };
   }
 
   private parseReturnOnly(): ReturnQuery {
@@ -1044,7 +1051,7 @@ class Parser {
             distinct: withClause.distinct,
           };
           const nextStmt = this.parse();
-          return { type: 'With', source, next: nextStmt };
+          return { type: 'With', source, where: withClause.where, next: nextStmt };
         } else {
           this.pos = save;
         }
@@ -1152,7 +1159,7 @@ class Parser {
         distinct: withClause.distinct,
       };
       const nextStmt = this.parse();
-      return { type: 'With', source, next: nextStmt };
+      return { type: 'With', source, where: withClause.where, next: nextStmt };
     }
     throw new Error('Parse error: unsupported MATCH clause');
   }
