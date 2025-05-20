@@ -1269,6 +1269,9 @@ export function logicalToPhysical(
         ): Promise<void> => {
           if (hop >= plan.hops.length) {
             const aliasVars = new Map(varsLocal);
+            if (plan.where && !evalWhere(plan.where, aliasVars, params)) {
+              return;
+            }
             if (hasAggFlag) {
               const keyParts: unknown[] = [];
               let group = null;
