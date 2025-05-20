@@ -218,28 +218,59 @@ export class SqlJsSchemaAdapter implements StorageAdapter {
           if (!ok) continue;
         }
 
+        function exprVal(expr: any): any {
+          if (!expr) return undefined;
+          if (typeof expr === 'object' && 'type' in expr) {
+            if (expr.type === 'Literal') return expr.value;
+            if (expr.type === 'Parameter') return params[expr.name];
+            if (expr.type === 'Property' && expr.variable === matchAst.variable)
+              return node.properties[expr.property];
+          }
+          return expr;
+        }
+
         function checkWhere(where: any): boolean {
           if (!where) return true;
           if (where.type === 'Condition') {
-            if (
-              where.operator === '=' &&
-              where.left.type === 'Property' &&
-              where.left.variable === matchAst.variable &&
-              where.right
-            ) {
-              const prop = where.left.property;
-              const val =
-                where.right.type === 'Literal'
-                  ? where.right.value
-                  : where.right.type === 'Parameter'
-                  ? params[where.right.name]
-                  : undefined;
-              return node.properties[prop] === val;
+            const left = exprVal(where.left);
+            const right = exprVal(where.right);
+            switch (where.operator) {
+              case '=':
+                return left === right;
+              case '<>':
+                return left !== right;
+              case '>':
+                return left > right;
+              case '>=':
+                return left >= right;
+              case '<':
+                return left < right;
+              case '<=':
+                return left <= right;
+              case 'IN':
+                return Array.isArray(right) && right.includes(left);
+              case 'IS NULL':
+                return left === null || left === undefined;
+              case 'IS NOT NULL':
+                return left !== null && left !== undefined;
+              case 'STARTS WITH':
+                return typeof left === 'string' && typeof right === 'string' && left.startsWith(right);
+              case 'ENDS WITH':
+                return typeof left === 'string' && typeof right === 'string' && left.endsWith(right);
+              case 'CONTAINS':
+                return typeof left === 'string' && typeof right === 'string' && left.includes(right);
+              default:
+                return false;
             }
-            return false;
           }
           if (where.type === 'And') {
             return checkWhere(where.left) && checkWhere(where.right);
+          }
+          if (where.type === 'Or') {
+            return checkWhere(where.left) || checkWhere(where.right);
+          }
+          if (where.type === 'Not') {
+            return !checkWhere(where.clause);
           }
           return false;
         }

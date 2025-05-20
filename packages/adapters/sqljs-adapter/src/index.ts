@@ -302,47 +302,92 @@ export class SqlJsAdapter implements StorageAdapter {
       }
     }
 
-    function extractWhere(
-      where: any
-    ): [string, any][] | null {
-      if (!where) return [];
-      if (where.type === 'Condition') {
-        if (
-          where.operator === '=' &&
-          where.left.type === 'Property' &&
-          where.left.variable === matchAst.variable &&
-          where.right
-        ) {
-          const prop = where.left.property;
-          const val =
-            where.right.type === 'Literal'
-              ? where.right.value
-              : where.right.type === 'Parameter'
-              ? params[where.right.name]
-              : undefined;
-          if (val === undefined) return null;
-          return [[prop, val]];
-        }
-        return null;
+    function toValue(expr: any): any {
+      if (!expr) return undefined;
+      if (typeof expr === 'object' && 'type' in expr) {
+        if (expr.type === 'Literal') return expr.value;
+        if (expr.type === 'Parameter') return params[expr.name];
       }
-      if (where.type === 'And') {
-        const l = extractWhere(where.left);
-        const r = extractWhere(where.right);
+      return expr;
+    }
+
+    function convertWhere(where: any): [string, any[]] | null {
+      if (!where) return ['1', []];
+      if (where.type === 'Condition') {
+        if (where.left.type !== 'Property' || where.left.variable !== matchAst.variable)
+          return null;
+        const col = `json_extract(properties, '$.${where.left.property}')`;
+        switch (where.operator) {
+          case '=':
+          case '<>': {
+            const val = toValue(where.right);
+            if (val === undefined) return null;
+            if (val === null) {
+              return [
+                `${col} ${where.operator === '=' ? 'IS' : 'IS NOT'} NULL`,
+                [],
+              ];
+            }
+            return [`${col} ${where.operator} ?`, [val]];
+          }
+          case '>':
+          case '>=':
+          case '<':
+          case '<=': {
+            const val = toValue(where.right);
+            if (val === undefined) return null;
+            return [`${col} ${where.operator} ?`, [val]];
+          }
+          case 'IN': {
+            const val = toValue(where.right);
+            if (!Array.isArray(val)) return null;
+            if (val.length === 0) return ['0', []];
+            const placeholders = val.map(() => '?').join(', ');
+            return [`${col} IN (${placeholders})`, val];
+          }
+          case 'IS NULL':
+            return [`${col} IS NULL`, []];
+          case 'IS NOT NULL':
+            return [`${col} IS NOT NULL`, []];
+          case 'STARTS WITH': {
+            const val = toValue(where.right);
+            if (typeof val !== 'string') return null;
+            return [`${col} LIKE ?`, [val + '%']];
+          }
+          case 'ENDS WITH': {
+            const val = toValue(where.right);
+            if (typeof val !== 'string') return null;
+            return [`${col} LIKE ?`, ['%' + val]];
+          }
+          case 'CONTAINS': {
+            const val = toValue(where.right);
+            if (typeof val !== 'string') return null;
+            return [`${col} LIKE ?`, ['%' + val + '%']];
+          }
+          default:
+            return null;
+        }
+      }
+      if (where.type === 'And' || where.type === 'Or') {
+        const l = convertWhere(where.left);
+        const r = convertWhere(where.right);
         if (!l || !r) return null;
-        return [...l, ...r];
+        const op = where.type === 'And' ? 'AND' : 'OR';
+        return [`(${l[0]} ${op} ${r[0]})`, [...l[1], ...r[1]]];
+      }
+      if (where.type === 'Not') {
+        const inner = convertWhere(where.clause);
+        if (!inner) return null;
+        return [`NOT (${inner[0]})`, inner[1]];
       }
       return null;
     }
 
-    const whereConds = extractWhere(matchAst.where);
-    if (whereConds === null) return null;
-    for (const [k, v] of whereConds) {
-      if (v === null) {
-        conds.push(`json_extract(properties, '$.${k}') IS NULL`);
-      } else {
-        conds.push(`json_extract(properties, '$.${k}') = ?`);
-        paramsArr.push(v);
-      }
+    const whereSql = convertWhere(matchAst.where);
+    if (!whereSql) return null;
+    if (whereSql[0] !== '1') {
+      conds.push(whereSql[0]);
+      paramsArr.push(...whereSql[1]);
     }
     if (conds.length > 0) sql += ' WHERE ' + conds.join(' AND ');
     const self = this;
