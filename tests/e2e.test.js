@@ -998,3 +998,8 @@ runOnAdapters('WITH after relationship chain returns nodes', async engine => {
   for await (const row of engine.run(q)) out.push(row.title);
   assert.deepStrictEqual(out.sort(), ['John Wick', 'John Wick', 'The Matrix']);
 });
+runOnAdapters('top-level WITH returns value', async engine => {
+  const out = [];
+  for await (const row of engine.run('WITH 1 AS x RETURN x')) out.push(row.x);
+  assert.deepStrictEqual(out, [1]);
+});
