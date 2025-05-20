@@ -647,6 +647,43 @@ export function logicalToPhysical(
               usedIndex = true;
             }
           }
+          if (
+            !usedIndex &&
+            !boundNode &&
+            plan.labels &&
+            plan.labels.length > 0 &&
+            !plan.properties &&
+            adapter.indexLookup &&
+            adapter.listIndexes &&
+            plan.where &&
+            plan.where.type === 'Condition' &&
+            plan.where.operator === 'IN' &&
+            plan.where.left.type === 'Property' &&
+            plan.where.left.variable === plan.variable &&
+            plan.where.right
+          ) {
+            const prop = plan.where.left.property;
+            const values = evalExpr(plan.where.right, vars, params);
+            if (Array.isArray(values)) {
+              const indexes = await adapter.listIndexes();
+              const label = plan.labels[0];
+              const found = indexes.find(
+                i => i.label === label && i.properties.length === 1 && i.properties[0] === prop
+              );
+              if (found) {
+                const seen = new Set<number | string>();
+                for (const val of values) {
+                  for await (const node of adapter.indexLookup(label, prop, val)) {
+                    if (!seen.has(node.id)) {
+                      seen.add(node.id);
+                      await collect(node);
+                    }
+                  }
+                }
+                usedIndex = true;
+              }
+            }
+          }
           if (!usedIndex) {
             const scan = adapter.scanNodes(plan.labels ? { labels: plan.labels } : {});
             for await (const node of scan) {

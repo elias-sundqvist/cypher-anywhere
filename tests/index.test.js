@@ -72,3 +72,26 @@ test('index lookup faster than scan on large dataset', async () => {
 
   assert.ok(durIdx < durScan, `index ${durIdx} >= scan ${durScan}`);
 });
+
+test('planner uses index for WHERE IN list', async () => {
+  const data = makeDataset(10);
+  const adapter = new JsonAdapter({
+    dataset: data,
+    indexes: [{ label: 'Person', properties: ['name'], unique: true }]
+  });
+  let used = false;
+  const orig = adapter.indexLookup.bind(adapter);
+  adapter.indexLookup = async function*(label, prop, value) {
+    used = true;
+    for await (const n of orig(label, prop, value)) {
+      yield n;
+    }
+  };
+  const engine = new CypherEngine({ adapter });
+  const out = [];
+  for await (const row of engine.run('MATCH (n:Person) WHERE n.name IN ["name5"] RETURN n')) {
+    out.push(row.n);
+  }
+  assert.strictEqual(out.length, 1);
+  assert.ok(used);
+});
