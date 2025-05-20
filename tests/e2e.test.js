@@ -347,6 +347,13 @@ runOnAdapters('match with WHERE not equals operator', async engine => {
   assert.strictEqual(out.length, 2);
 });
 
+runOnAdapters('match with WHERE IN list', async engine => {
+  const out = [];
+  const q = 'MATCH (n:Person) WHERE n.name IN ["Alice", "Bob"] RETURN n';
+  for await (const row of engine.run(q)) out.push(row.n.properties.name);
+  assert.deepStrictEqual(out.sort(), ['Alice', 'Bob']);
+});
+
 runOnAdapters('FOREACH create multiple nodes', async engine => {
   for await (const _ of engine.run('FOREACH x IN [1,2,3] CREATE (n:Batch)')) {}
   const out = [];
