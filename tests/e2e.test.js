@@ -781,3 +781,11 @@ runOnAdapters('RETURN star with relationship chain', async engine => {
   assert.strictEqual(out[0].m.properties.title, 'John Wick');
   assert.strictEqual(out[0].r.type, 'ACTED_IN');
 });
+
+runOnAdapters('single hop chain with WHERE filter', async engine => {
+  const q =
+    'MATCH (p:Person)-[:ACTED_IN]->(m:Movie) WHERE m.released > 2000 RETURN m';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.m.properties.title);
+  assert.deepStrictEqual(out.sort(), ['John Wick', 'John Wick'].sort());
+});
