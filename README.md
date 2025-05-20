@@ -30,8 +30,9 @@ This repository currently contains a small proof-of-concept implementation. Only
 ```ts
 import { CypherEngine } from '@cypher-anywhere/core';
 import { JsonAdapter } from '@cypher-anywhere/json-adapter';
+import { SqlJsAdapter } from '@cypher-anywhere/sqljs-adapter';
 
-const adapter = new JsonAdapter({ datasetPath: './tests/data/sample.json' });
+const adapter = new SqlJsAdapter({ datasetPath: './tests/data/sample.json' });
 const engine = new CypherEngine({ adapter });
 
 for await (const row of engine.run('MATCH (n) RETURN n')) {
