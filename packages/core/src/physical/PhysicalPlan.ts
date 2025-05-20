@@ -948,7 +948,7 @@ export function logicalToPhysical(
           let ok = true;
           if (plan.start.properties) {
             for (const [k, v] of Object.entries(plan.start.properties)) {
-              if (node.properties[k] !== v) {
+              if (node.properties[k] !== evalPropValue(v, vars, params)) {
                 ok = false;
                 break;
               }
