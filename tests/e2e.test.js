@@ -546,6 +546,14 @@ runOnAdapters('variable length undirected path', async engine => {
   assert.deepStrictEqual(out, [2]);
 });
 
+runOnAdapters('typed variable length path', async engine => {
+  const q =
+    'MATCH p=(a:Person {name:"Alice"})-[:ACTED_IN*]->(m:Movie {title:"John Wick"}) RETURN length(p) AS len';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.len);
+  assert.deepStrictEqual(out, [1]);
+});
+
 runOnAdapters('multi-hop ->()-> chain returns final node', async engine => {
   const out = [];
   const q =
