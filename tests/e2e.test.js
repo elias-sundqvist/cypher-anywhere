@@ -955,6 +955,13 @@ runOnAdapters('arithmetic subtraction in RETURN', async engine => {
   for await (const row of engine.run(q)) out.push(row.diff);
   assert.deepStrictEqual(out, [99, 114]);
 });
+
+runOnAdapters('arithmetic multiplication and division in RETURN', async engine => {
+  const q = 'MATCH (m:Movie) RETURN (m.released - 1900) / 2 * 3 AS val ORDER BY val';
+  const out = [];
+  for await (const row of engine.run(q)) out.push(row.val);
+  assert.deepStrictEqual(out, [((1999 - 1900) / 2) * 3, ((2014 - 1900) / 2) * 3]);
+});
 runOnAdapters('RETURN star returns all variables', async engine => {
   const out = [];
   for await (const row of engine.run('MATCH (n:Person {name:"Alice"}) RETURN *')) out.push(row);

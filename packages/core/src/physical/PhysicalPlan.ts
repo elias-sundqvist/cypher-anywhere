@@ -38,6 +38,22 @@ function evalExpr(
       }
       return NaN;
     }
+    case 'Mul': {
+      const l = evalExpr(expr.left, vars, params);
+      const r = evalExpr(expr.right, vars, params);
+      if (typeof l === 'number' && typeof r === 'number') {
+        return l * r;
+      }
+      return NaN;
+    }
+    case 'Div': {
+      const l = evalExpr(expr.left, vars, params);
+      const r = evalExpr(expr.right, vars, params);
+      if (typeof l === 'number' && typeof r === 'number') {
+        return l / r;
+      }
+      return NaN;
+    }
     case 'Nodes':
       return vars.get(expr.variable);
     case 'Length': {
@@ -201,6 +217,8 @@ function hasAgg(expr: Expression): boolean {
       return true;
     case 'Add':
     case 'Sub':
+    case 'Mul':
+    case 'Div':
       return hasAgg(expr.left) || hasAgg(expr.right);
     default:
       return false;
@@ -239,7 +257,7 @@ type AggState =
       values: unknown[];
       seen: Set<string>;
     }
-  | { type: 'Add' | 'Sub'; left: AggState | null; right: AggState | null };
+  | { type: 'Add' | 'Sub' | 'Mul' | 'Div'; left: AggState | null; right: AggState | null };
 
 function initAggState(expr: Expression): AggState | null {
   switch (expr.type) {
@@ -347,6 +365,8 @@ function updateAggState(
     }
     case 'Add':
     case 'Sub':
+    case 'Mul':
+    case 'Div':
       updateAggState((expr as any).left, state.left, vars, params);
       updateAggState((expr as any).right, state.right, vars, params);
       break;
@@ -368,6 +388,16 @@ function finalizeAgg(
     case 'Sub':
       return (
         finalizeAgg((expr as any).left, state ? (state as any).left : null, vars, params) -
+        finalizeAgg((expr as any).right, state ? (state as any).right : null, vars, params)
+      );
+    case 'Mul':
+      return (
+        finalizeAgg((expr as any).left, state ? (state as any).left : null, vars, params) *
+        finalizeAgg((expr as any).right, state ? (state as any).right : null, vars, params)
+      );
+    case 'Div':
+      return (
+        finalizeAgg((expr as any).left, state ? (state as any).left : null, vars, params) /
         finalizeAgg((expr as any).right, state ? (state as any).right : null, vars, params)
       );
     case 'Count':
