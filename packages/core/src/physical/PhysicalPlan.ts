@@ -81,7 +81,7 @@ function evalExpr(
   }
 }
 
-async function findPath(
+async function* findPaths(
   adapter: StorageAdapter,
   startId: number | string,
   endId: number | string,
@@ -89,7 +89,7 @@ async function findPath(
   maxHops = Infinity,
   direction: 'out' | 'in' | 'none' = 'out',
   relType?: string
-): Promise<NodeRecord[] | null> {
+): AsyncIterable<NodeRecord[]> {
   if (!adapter.scanRelationships || !adapter.getNodeById) {
     throw new Error('Adapter does not support path finding');
   }
@@ -99,7 +99,6 @@ async function findPath(
     rels.push(r);
   }
   const queue: (Array<number | string>)[] = [[startId]];
-  const visited = new Set<string>([`${startId}:0`]);
   while (queue.length > 0) {
     const path = queue.shift()!;
     const last = path[path.length - 1];
@@ -108,34 +107,29 @@ async function findPath(
       const nodes: NodeRecord[] = [];
       for (const id of path) {
         const n = await adapter.getNodeById(id);
-        if (!n) return null;
+        if (!n) return;
         nodes.push(n);
       }
-      return nodes;
+      yield nodes;
     }
     if (hops >= maxHops) continue;
     for (const rel of rels) {
       if (direction === 'out' || direction === 'none') {
         if (rel.startNode === last) {
-          const key = `${rel.endNode}:${hops + 1}`;
-          if (!visited.has(key)) {
-            visited.add(key);
+          if (!path.includes(rel.endNode)) {
             queue.push([...path, rel.endNode]);
           }
         }
       }
       if (direction === 'in' || direction === 'none') {
         if (rel.endNode === last) {
-          const key = `${rel.startNode}:${hops + 1}`;
-          if (!visited.has(key)) {
-            visited.add(key);
+          if (!path.includes(rel.startNode)) {
             queue.push([...path, rel.startNode]);
           }
         }
       }
     }
   }
-  return null;
 }
 
 function evalWhere(
@@ -1226,7 +1220,7 @@ export function logicalToPhysical(
         const rows: { row: Record<string, unknown>; order?: any }[] = [];
         for (const s of starts) {
           for (const e of ends) {
-            const path = await findPath(
+            for await (const path of findPaths(
               adapter,
               s.id,
               e.id,
@@ -1234,25 +1228,33 @@ export function logicalToPhysical(
               plan.maxHops ?? Infinity,
               plan.direction ?? 'out',
               plan.relType
-            );
-            if (!path) continue;
-            vars.set(plan.pathVariable, path);
-            const local = new Map(vars);
-            if (plan.start.variable) local.set(plan.start.variable, s);
-            if (plan.end.variable) local.set(plan.end.variable, e);
-            if (!plan.returnItems) {
-              return;
+            )) {
+              vars.set(plan.pathVariable, path);
+              const local = new Map(vars);
+              if (plan.start.variable) local.set(plan.start.variable, s);
+              if (plan.end.variable) local.set(plan.end.variable, e);
+              if (!plan.returnItems) {
+                return;
+              }
+              const row: Record<string, unknown> = {};
+              const aliasVars = new Map(local);
+              plan.returnItems.forEach((item, idx) => {
+                const alias =
+                  item.alias ||
+                  (item.expression.type === 'Variable'
+                    ? item.expression.name
+                    : plan.returnItems!.length === 1
+                    ? 'value'
+                    : `value${idx}`);
+                const val = evalExpr(item.expression, aliasVars, params);
+                row[alias] = val;
+                if (item.alias) aliasVars.set(item.alias, val);
+              });
+              const order = plan.orderBy
+                ? plan.orderBy.map(o => evalExpr(o.expression, aliasVars, params))
+                : undefined;
+              rows.push({ row, order });
             }
-            const row: Record<string, unknown> = {};
-            const aliasVars = new Map(local);
-            plan.returnItems.forEach((item, idx) => {
-              const alias = item.alias || (item.expression.type === 'Variable' ? item.expression.name : plan.returnItems!.length === 1 ? 'value' : `value${idx}`);
-              const val = evalExpr(item.expression, aliasVars, params);
-              row[alias] = val;
-              if (item.alias) aliasVars.set(item.alias, val);
-            });
-            const order = plan.orderBy ? plan.orderBy.map(o => evalExpr(o.expression, aliasVars, params)) : undefined;
-            rows.push({ row, order });
           }
         }
         if (plan.returnItems) {
