@@ -68,6 +68,15 @@ export interface StorageAdapter {
   beginTransaction?(): Promise<TransactionCtx>;
   commit?(tx: TransactionCtx): Promise<void>;
   rollback?(tx: TransactionCtx): Promise<void>;
+
+  /** Optional: run a SQL-transpiled version of a query */
+  runTranspiled?(
+    cypher: string,
+    params: Record<string, any>
+  ): AsyncIterable<Record<string, unknown>> | null;
+
+  /** Indicates whether this adapter can attempt Cypher-to-SQL transpilation */
+  supportsTranspilation?: boolean;
 }
 
 export interface IndexMetadata {

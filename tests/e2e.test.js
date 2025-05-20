@@ -48,24 +48,35 @@ function runOnAdapters(name, fn) {
   }
 }
 
-runOnAdapters('MATCH all nodes', async engine => {
+runOnAdapters('MATCH all nodes', async (engine, adapter) => {
+  const result = engine.run('MATCH (n) RETURN n');
   const out = [];
-  for await (const row of engine.run('MATCH (n) RETURN n')) out.push(row.n);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, baseData.nodes.length);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('MATCH with label', async engine => {
+runOnAdapters('MATCH with label', async (engine, adapter) => {
+  const result = engine.run('MATCH (n:Person) RETURN n');
   const out = [];
-  for await (const row of engine.run('MATCH (n:Person) RETURN n')) out.push(row.n);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 3);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('MATCH with property filter', async engine => {
+runOnAdapters('MATCH with property filter', async (engine, adapter) => {
+  const result = engine.run('MATCH (n:Person {name:"Alice"}) RETURN n');
   const out = [];
-  for await (const row of engine.run('MATCH (n:Person {name:"Alice"}) RETURN n'))
-    out.push(row.n);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('CREATE node then MATCH finds it', async engine => {
