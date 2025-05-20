@@ -595,6 +595,14 @@ runOnAdapters('OPTIONAL MATCH with COUNT returns 0', async engine => {
   assert.deepStrictEqual(out, [0]);
 });
 
+runOnAdapters('COUNT DISTINCT aggregation', async engine => {
+  for await (const _ of engine.run('CREATE (n:Person {name:"Bob"})')) {}
+  const out = [];
+  const q = 'MATCH (p:Person) RETURN COUNT(DISTINCT p.name) AS cnt';
+  for await (const row of engine.run(q)) out.push(row.cnt);
+  assert.strictEqual(out[0], 3);
+});
+
 runOnAdapters('SUM aggregation', async engine => {
   const out = [];
   for await (const row of engine.run('MATCH (m:Movie) RETURN SUM(m.released)')) out.push(row.value);
