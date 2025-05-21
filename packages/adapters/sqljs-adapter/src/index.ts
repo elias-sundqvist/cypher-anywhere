@@ -6,7 +6,8 @@ import {
   TransactionCtx,
   IndexMetadata,
   parseMany,
-  MatchReturnQuery
+  MatchReturnQuery,
+  Expression
 } from '@cypher-anywhere/core';
 import type * as fsType from 'fs';
 import initSqlJs, { Database } from 'sql.js';
@@ -250,6 +251,282 @@ export class SqlJsAdapter implements StorageAdapter {
     this.db.run('ROLLBACK');
   }
 
+  // Helper functions for evaluating expressions and aggregations similar to
+  // the core engine's PhysicalPlan implementation. These are purposely scoped
+  // to the features needed by transpiled queries.
+
+  private evalExpr(
+    expr: Expression,
+    vars: Map<string, any>,
+    params: Record<string, any>
+  ): any {
+    switch (expr.type) {
+      case 'Literal':
+        return expr.value;
+      case 'Property': {
+        const rec = vars.get(expr.variable) as NodeRecord | RelRecord | undefined;
+        if (!rec) return undefined;
+        return rec.properties[expr.property];
+      }
+      case 'Variable': {
+        const val = vars.get(expr.name);
+        if (val && typeof val === 'object' && 'nodes' in val && 'relationships' in val)
+          return (val as any).nodes;
+        return val;
+      }
+      case 'Parameter':
+        return params[expr.name];
+      case 'Add':
+        const la = this.evalExpr(expr.left, vars, params);
+        const ra = this.evalExpr(expr.right, vars, params);
+        if (la == null || ra == null) return null;
+        if (typeof la === 'number' && typeof ra === 'number') return la + ra;
+        return String(la) + String(ra);
+      case 'Sub': {
+        const l = this.evalExpr(expr.left, vars, params);
+        const r = this.evalExpr(expr.right, vars, params);
+        if (l == null || r == null) return null;
+        if (typeof l === 'number' && typeof r === 'number') return l - r;
+        return NaN;
+      }
+      case 'Mul': {
+        const l = this.evalExpr(expr.left, vars, params);
+        const r = this.evalExpr(expr.right, vars, params);
+        if (l == null || r == null) return null;
+        if (typeof l === 'number' && typeof r === 'number') return l * r;
+        return NaN;
+      }
+      case 'Div': {
+        const l = this.evalExpr(expr.left, vars, params);
+        const r = this.evalExpr(expr.right, vars, params);
+        if (l == null || r == null) return null;
+        if (typeof l === 'number' && typeof r === 'number') return l / r;
+        return NaN;
+      }
+      case 'Neg': {
+        const v = this.evalExpr(expr.expression, vars, params);
+        if (v == null) return null;
+        return typeof v === 'number' ? -v : NaN;
+      }
+      case 'Labels': {
+        const rec = vars.get(expr.variable) as NodeRecord | undefined;
+        return rec ? rec.labels : undefined;
+      }
+      case 'Type': {
+        const rec = vars.get(expr.variable) as RelRecord | undefined;
+        return rec ? rec.type : undefined;
+      }
+      case 'Id': {
+        const rec = vars.get(expr.variable) as NodeRecord | RelRecord | undefined;
+        return rec ? rec.id : undefined;
+      }
+      case 'All':
+        return Object.fromEntries(vars.entries());
+      default:
+        throw new Error('Unknown expression');
+    }
+  }
+
+  private hasAgg(expr: Expression): boolean {
+    switch (expr.type) {
+      case 'Count':
+      case 'Sum':
+      case 'Min':
+      case 'Max':
+      case 'Avg':
+      case 'Collect':
+        return true;
+      case 'Add':
+      case 'Sub':
+      case 'Mul':
+      case 'Div':
+        return this.hasAgg(expr.left) || this.hasAgg(expr.right);
+      case 'Neg':
+        return this.hasAgg(expr.expression);
+      default:
+        return false;
+    }
+  }
+
+  private serializeVars(vars: Map<string, any>): string {
+    const obj: Record<string, unknown> = {};
+    const entries = Array.from(vars.entries()).sort(([a], [b]) =>
+      a.localeCompare(b)
+    );
+    for (const [k, v] of entries) {
+      if (v && typeof v === 'object' && 'id' in v) {
+        obj[k] = (v as any).id;
+      } else {
+        obj[k] = v;
+      }
+    }
+    return JSON.stringify(obj);
+  }
+
+  private initAggState(expr: Expression): any | null {
+    switch (expr.type) {
+      case 'Count':
+        return { type: 'Count', distinct: expr.distinct, expr: expr.expression, count: 0, values: new Set<string>() };
+      case 'Sum':
+      case 'Min':
+      case 'Max':
+        return { type: expr.type, distinct: expr.distinct, expr: expr.expression, sum: 0, min: undefined, max: undefined, values: new Set<string>() };
+      case 'Avg':
+        return { type: 'Avg', distinct: expr.distinct, expr: expr.expression, sum: 0, count: 0, values: new Set<string>() };
+      case 'Collect':
+        return { type: 'Collect', distinct: expr.distinct, expr: expr.expression, values: [] as unknown[], seen: new Set<string>() };
+      case 'Add':
+      case 'Sub':
+      case 'Mul':
+      case 'Div':
+        const left = this.initAggState(expr.left);
+        const right = this.initAggState(expr.right);
+        return left || right ? { type: expr.type, left, right } : null;
+      case 'Neg':
+        const inner = this.initAggState(expr.expression);
+        return inner ? { type: 'Neg', inner } : null;
+      default:
+        return null;
+    }
+  }
+
+  private updateAggState(
+    expr: Expression,
+    state: any | null,
+    vars: Map<string, any>,
+    params: Record<string, any>
+  ) {
+    if (!state) return;
+    switch (state.type) {
+      case 'Count': {
+        const val = state.expr ? this.evalExpr(state.expr, vars, params) : null;
+        if (state.distinct) {
+          const key = state.expr === null ? this.serializeVars(vars) : JSON.stringify(val);
+          if (!state.values.has(key)) {
+            state.values.add(key);
+            state.count++;
+          }
+        } else {
+          state.count++;
+        }
+        break;
+      }
+      case 'Sum': {
+        const v = this.evalExpr(state.expr, vars, params);
+        let include = true;
+        if (state.distinct) {
+          const key = JSON.stringify(v);
+          if (state.values.has(key)) include = false;
+          else state.values.add(key);
+        }
+        if (include && typeof v === 'number') state.sum = (state.sum || 0) + v;
+        break;
+      }
+      case 'Min': {
+        const v = this.evalExpr(state.expr, vars, params);
+        let include = true;
+        if (state.distinct) {
+          const key = JSON.stringify(v);
+          if (state.values.has(key)) include = false;
+          else state.values.add(key);
+        }
+        if (include && (state.min === undefined || v < state.min)) state.min = v;
+        break;
+      }
+      case 'Max': {
+        const v = this.evalExpr(state.expr, vars, params);
+        let include = true;
+        if (state.distinct) {
+          const key = JSON.stringify(v);
+          if (state.values.has(key)) include = false;
+          else state.values.add(key);
+        }
+        if (include && (state.max === undefined || v > state.max)) state.max = v;
+        break;
+      }
+      case 'Avg': {
+        const v = this.evalExpr(state.expr, vars, params);
+        let include = true;
+        if (state.distinct) {
+          const key = JSON.stringify(v);
+          if (state.values.has(key)) include = false;
+          else state.values.add(key);
+        }
+        if (include && typeof v === 'number') {
+          state.sum += v;
+          state.count++;
+        }
+        break;
+      }
+      case 'Collect': {
+        const v = this.evalExpr(state.expr, vars, params);
+        if (state.distinct) {
+          const key = JSON.stringify(v);
+          if (state.seen.has(key)) break;
+          state.seen.add(key);
+        }
+        state.values.push(v);
+        break;
+      }
+      case 'Add':
+      case 'Sub':
+      case 'Mul':
+      case 'Div':
+        this.updateAggState((expr as any).left, state.left, vars, params);
+        this.updateAggState((expr as any).right, state.right, vars, params);
+        break;
+      case 'Neg':
+        this.updateAggState((expr as any).expression, state.inner, vars, params);
+        break;
+    }
+  }
+
+  private finalizeAgg(
+    expr: Expression,
+    state: any | null,
+    vars: Map<string, any>,
+    params: Record<string, any>
+  ): any {
+    switch (expr.type) {
+      case 'Add':
+        return (
+          this.finalizeAgg((expr as any).left, state ? state.left : null, vars, params) +
+          this.finalizeAgg((expr as any).right, state ? state.right : null, vars, params)
+        );
+      case 'Sub':
+        return (
+          this.finalizeAgg((expr as any).left, state ? state.left : null, vars, params) -
+          this.finalizeAgg((expr as any).right, state ? state.right : null, vars, params)
+        );
+      case 'Mul':
+        return (
+          this.finalizeAgg((expr as any).left, state ? state.left : null, vars, params) *
+          this.finalizeAgg((expr as any).right, state ? state.right : null, vars, params)
+        );
+      case 'Div':
+        return (
+          this.finalizeAgg((expr as any).left, state ? state.left : null, vars, params) /
+          this.finalizeAgg((expr as any).right, state ? state.right : null, vars, params)
+        );
+      case 'Neg':
+        return -this.finalizeAgg((expr as any).expression, state ? state.inner : null, vars, params);
+      case 'Count':
+        return state ? state.count : 0;
+      case 'Sum':
+        return state ? state.sum ?? 0 : 0;
+      case 'Min':
+        return state ? state.min ?? null : null;
+      case 'Max':
+        return state ? state.max ?? null : null;
+      case 'Avg':
+        return state ? (state.count ? state.sum / state.count : null) : null;
+      case 'Collect':
+        return state ? state.values : [];
+      default:
+        return this.evalExpr(expr, vars, params);
+    }
+  }
+
   supportsTranspilation = true;
 
   runTranspiled(
@@ -267,19 +544,41 @@ export class SqlJsAdapter implements StorageAdapter {
       matchAst.optional
     )
       return null;
-    for (const ri of matchAst.returnItems) {
-      const expr = ri.expression;
-      if (expr.type === 'Variable') {
-        if (expr.name !== matchAst.variable) return null;
-      } else if (expr.type === 'Property') {
-        if (expr.variable !== matchAst.variable) return null;
-      } else if (expr.type === 'Id' || expr.type === 'Labels') {
-        if (expr.variable !== matchAst.variable) return null;
-      } else if (expr.type === 'All') {
-        if (matchAst.returnItems.length !== 1) return null;
-      } else {
-        return null;
+    function checkExpr(expr: Expression): boolean {
+      switch (expr.type) {
+        case 'Variable':
+          return expr.name === matchAst.variable;
+        case 'Property':
+          return expr.variable === matchAst.variable;
+        case 'Id':
+        case 'Labels':
+          return expr.variable === matchAst.variable;
+        case 'Literal':
+        case 'Parameter':
+          return true;
+        case 'Add':
+        case 'Sub':
+        case 'Mul':
+        case 'Div':
+          return checkExpr(expr.left) && checkExpr(expr.right);
+        case 'Neg':
+          return checkExpr(expr.expression);
+        case 'Count':
+        case 'Sum':
+        case 'Min':
+        case 'Max':
+        case 'Avg':
+        case 'Collect':
+          return expr.expression ? checkExpr(expr.expression) : true;
+        case 'All':
+          return matchAst.returnItems.length === 1;
+        default:
+          return false;
       }
+    }
+
+    for (const ri of matchAst.returnItems) {
+      if (!checkExpr(ri.expression)) return null;
     }
     const aliasMap = new Map<string, any>();
     if (
@@ -425,30 +724,108 @@ export class SqlJsAdapter implements StorageAdapter {
       await self.ensureReady();
       const stmt = self.db.prepare(sql);
       stmt.bind(paramsArr);
-      let rows: { node: NodeRecord; data: Record<string, any> }[] = [];
+      const results: NodeRecord[] = [];
       while (stmt.step()) {
         const node = self.rowToNode(stmt.getAsObject());
-        const data: Record<string, any> = {};
-        for (const [name, expr] of aliasMap.entries()) {
-          if (expr.type === 'Variable') {
-            data[name] = node;
-          } else if (expr.type === 'Property') {
-            data[name] = node.properties[expr.property];
-          } else if (expr.type === 'Id') {
-            data[name] = node.id;
-          } else if (expr.type === 'Labels') {
-            data[name] = node.labels;
-          }
-        }
-        rows.push({ node, data });
+        results.push(node);
       }
       stmt.free();
 
+      const hasAggItem = matchAst.returnItems.map(r => self.hasAgg(r.expression));
+      const hasAgg = hasAggItem.some(v => v);
+      const aliasFor = (ri: typeof matchAst.returnItems[number], idx: number): string => {
+        if (ri.alias) return ri.alias;
+        if (ri.expression.type === 'Variable') return ri.expression.name;
+        return matchAst.returnItems.length === 1 ? 'value' : `value${idx}`;
+      };
+
+      let rows: { row: Record<string, any>; order?: any[] }[] = [];
+      if (hasAgg) {
+        const groups = new Map<string, { row: Record<string, any>; aggs: any[]; record?: NodeRecord }>();
+        const vars = new Map<string, any>();
+        for (const node of results) {
+          vars.set(matchAst.variable, node);
+          const keyParts: any[] = [];
+          for (let i = 0; i < matchAst.returnItems.length; i++) {
+            if (!hasAggItem[i]) keyParts.push(self.evalExpr(matchAst.returnItems[i].expression, vars, params));
+          }
+          const key = JSON.stringify(keyParts);
+          let group = groups.get(key);
+          if (!group) {
+            const row: Record<string, any> = {};
+            let j = 0;
+            matchAst.returnItems.forEach((item, idx) => {
+              if (!hasAggItem[idx]) {
+                row[aliasFor(item, idx)] = keyParts[j++];
+              }
+            });
+            group = { row, aggs: [], record: node };
+            groups.set(key, group);
+          }
+          matchAst.returnItems.forEach((item, idx) => {
+            if (!hasAggItem[idx]) return;
+            const cur = group!.aggs[idx] = group!.aggs[idx] ?? self.initAggState(item.expression);
+            self.updateAggState(item.expression, cur, vars, params);
+          });
+        }
+        if (groups.size === 0 && hasAggItem.every(v => v)) {
+          groups.set('__empty__', { row: {}, aggs: [] });
+        }
+        for (const group of groups.values()) {
+          const localVars = new Map<string, any>();
+          if (group.record) localVars.set(matchAst.variable, group.record);
+          matchAst.returnItems.forEach((item, idx) => {
+            if (!hasAggItem[idx]) return;
+            group.row[aliasFor(item, idx)] = self.finalizeAgg(
+              item.expression,
+              group.aggs[idx],
+              localVars,
+              params
+            );
+          });
+          let order: any[] | undefined;
+          if (matchAst.orderBy) {
+            const aliasVars = new Map(localVars);
+            matchAst.returnItems.forEach((it, i) => {
+              const alias = aliasFor(it, i);
+              aliasVars.set(alias, group.row[alias]);
+              if (it.alias) aliasVars.set(it.alias, group.row[alias]);
+            });
+            order = matchAst.orderBy.map(o => self.evalExpr(o.expression, aliasVars, params));
+          }
+          rows.push({ row: group.row, order });
+        }
+      } else {
+        for (const node of results) {
+          const vars = new Map<string, any>();
+          vars.set(matchAst.variable, node);
+          const row: Record<string, any> = {};
+          const aliasVars = new Map(vars);
+          matchAst.returnItems.forEach((item, idx) => {
+            const alias = aliasFor(item, idx);
+            if (item.expression.type === 'All') {
+              for (const [k, v] of vars.entries()) {
+                row[k] = v;
+                aliasVars.set(k, v);
+              }
+            } else {
+              const val = self.evalExpr(item.expression, vars, params);
+              row[alias] = val;
+              if (item.alias) aliasVars.set(item.alias, val);
+            }
+          });
+          const order = matchAst.orderBy
+            ? matchAst.orderBy.map(o => self.evalExpr(o.expression, aliasVars, params))
+            : undefined;
+          rows.push({ row, order });
+        }
+      }
+
       if (matchAst.distinct) {
         const seen = new Set<string>();
-        const uniq: { node: NodeRecord; data: Record<string, any> }[] = [];
+        const uniq: typeof rows = [];
         for (const r of rows) {
-          const key = JSON.stringify(r.data);
+          const key = JSON.stringify(r.row);
           if (!seen.has(key)) {
             seen.add(key);
             uniq.push(r);
@@ -459,31 +836,15 @@ export class SqlJsAdapter implements StorageAdapter {
 
       if (matchAst.orderBy && matchAst.orderBy.length > 0) {
         rows.sort((a, b) => {
-          for (const ob of matchAst.orderBy!) {
-            let aval: any;
-            let bval: any;
-            const expr =
-              ob.expression.type === 'Variable' && aliasMap.has(ob.expression.name)
-                ? aliasMap.get(ob.expression.name)
-                : ob.expression;
-            if (expr.type === 'Variable') {
-              aval = a.node;
-              bval = b.node;
-            } else if (expr.type === 'Property') {
-              aval = a.node.properties[expr.property];
-              bval = b.node.properties[expr.property];
-            } else if (expr.type === 'Id') {
-              aval = a.node.id;
-              bval = b.node.id;
-            } else if (expr.type === 'Labels') {
-              aval = a.node.labels.join(',');
-              bval = b.node.labels.join(',');
-            } else {
-              aval = undefined;
-              bval = undefined;
-            }
-            if (aval < bval) return ob.direction === 'DESC' ? 1 : -1;
-            if (aval > bval) return ob.direction === 'DESC' ? -1 : 1;
+          for (let i = 0; i < matchAst.orderBy!.length; i++) {
+            const av = a.order ? a.order[i] : undefined;
+            const bv = b.order ? b.order[i] : undefined;
+            if (av === bv) continue;
+            if (av === undefined) return 1;
+            if (bv === undefined) return -1;
+            let cmp = av > bv ? 1 : -1;
+            if (matchAst.orderBy![i].direction === 'DESC') cmp = -cmp;
+            return cmp;
           }
           return 0;
         });
@@ -503,7 +864,7 @@ export class SqlJsAdapter implements StorageAdapter {
       }
       const slice = rows.slice(start, end);
       for (const r of slice) {
-        yield r.data;
+        yield r.row;
       }
     }
     return gen();

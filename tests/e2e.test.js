@@ -963,16 +963,24 @@ runOnAdapters('chain match with parameter property', async engine => {
   assert.deepStrictEqual(out.sort(), ['John Wick', 'The Matrix']);
 });
 
-runOnAdapters('COUNT aggregation', async engine => {
+runOnAdapters('COUNT aggregation', async (engine, adapter) => {
+  const result = engine.run('MATCH (m:Movie) RETURN COUNT(m)');
   const out = [];
-  for await (const row of engine.run('MATCH (m:Movie) RETURN COUNT(m)')) out.push(row.value);
+  for await (const row of result) out.push(row.value);
   assert.strictEqual(out[0], 2);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('COUNT on empty result returns 0', async engine => {
+runOnAdapters('COUNT on empty result returns 0', async (engine, adapter) => {
+  const result = engine.run('MATCH (n:Missing) RETURN COUNT(n) AS cnt');
   const out = [];
-  for await (const row of engine.run('MATCH (n:Missing) RETURN COUNT(n) AS cnt')) out.push(row.cnt);
+  for await (const row of result) out.push(row.cnt);
   assert.deepStrictEqual(out, [0]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('OPTIONAL MATCH with COUNT returns 0', async engine => {
@@ -981,49 +989,73 @@ runOnAdapters('OPTIONAL MATCH with COUNT returns 0', async engine => {
   assert.deepStrictEqual(out, [0]);
 });
 
-runOnAdapters('COUNT DISTINCT aggregation', async engine => {
+runOnAdapters('COUNT DISTINCT aggregation', async (engine, adapter) => {
   for await (const _ of engine.run('CREATE (n:Person {name:"Bob"})')) {}
-  const out = [];
   const q = 'MATCH (p:Person) RETURN COUNT(DISTINCT p.name) AS cnt';
-  for await (const row of engine.run(q)) out.push(row.cnt);
+  const result = engine.run(q);
+  const out = [];
+  for await (const row of result) out.push(row.cnt);
   assert.strictEqual(out[0], 3);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('COUNT DISTINCT star counts rows', async engine => {
-  const out = [];
+runOnAdapters('COUNT DISTINCT star counts rows', async (engine, adapter) => {
   const q = 'MATCH (p:Person) RETURN COUNT(DISTINCT *) AS cnt';
-  for await (const row of engine.run(q)) out.push(row.cnt);
+  const result = engine.run(q);
+  const out = [];
+  for await (const row of result) out.push(row.cnt);
   assert.strictEqual(out[0], 3);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('SUM aggregation', async engine => {
+runOnAdapters('SUM aggregation', async (engine, adapter) => {
+  const result = engine.run('MATCH (m:Movie) RETURN SUM(m.released)');
   const out = [];
-  for await (const row of engine.run('MATCH (m:Movie) RETURN SUM(m.released)')) out.push(row.value);
+  for await (const row of result) out.push(row.value);
   assert.strictEqual(out[0], 1999 + 2014);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('aggregation inside expression', async engine => {
-  const out = [];
+runOnAdapters('aggregation inside expression', async (engine, adapter) => {
   const q = 'MATCH (m:Movie) RETURN COUNT(m) + 1 AS cnt';
-  for await (const row of engine.run(q)) out.push(row.cnt);
+  const result = engine.run(q);
+  const out = [];
+  for await (const row of result) out.push(row.cnt);
   assert.deepStrictEqual(out, [3]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('GROUP BY with COUNT', async engine => {
+runOnAdapters('GROUP BY with COUNT', async (engine, adapter) => {
   const q = 'MATCH (m:Movie) RETURN m.released AS year, COUNT(m) AS cnt';
+  const result = engine.run(q);
   const res = {};
-  for await (const row of engine.run(q)) res[row.year] = row.cnt;
+  for await (const row of result) res[row.year] = row.cnt;
   assert.strictEqual(res[1999], 1);
   assert.strictEqual(res[2014], 1);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('ORDER BY after aggregation', async engine => {
+runOnAdapters('ORDER BY after aggregation', async (engine, adapter) => {
   for await (const _ of engine.run('CREATE (m:Movie {title:"Extra", released:2014})')) {}
   const q =
     'MATCH (m:Movie) RETURN m.released AS year, COUNT(m) AS cnt ORDER BY cnt DESC';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(`${row.year}:${row.cnt}`);
+  for await (const row of result) out.push(`${row.year}:${row.cnt}`);
   assert.deepStrictEqual(out, ['2014:2', '1999:1']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('COUNT on relationship chain', async engine => {
@@ -1034,33 +1066,49 @@ runOnAdapters('COUNT on relationship chain', async engine => {
   assert.deepStrictEqual(out, ['Alice:2', 'Bob:1']);
 });
 
-runOnAdapters('COLLECT aggregation returns list', async engine => {
+runOnAdapters('COLLECT aggregation returns list', async (engine, adapter) => {
   const q = 'MATCH (p:Person) RETURN COLLECT(p.name) AS names';
+  const result = engine.run(q);
   let row;
-  for await (const r of engine.run(q)) row = r;
+  for await (const r of result) row = r;
   assert.ok(row);
   assert.deepStrictEqual(row.names.sort(), ['Alice', 'Bob', 'Carol']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('MIN aggregation', async engine => {
-  const out = [];
+runOnAdapters('MIN aggregation', async (engine, adapter) => {
   const q = 'MATCH (m:Movie) RETURN MIN(m.released) AS year';
-  for await (const row of engine.run(q)) out.push(row.year);
+  const result = engine.run(q);
+  const out = [];
+  for await (const row of result) out.push(row.year);
   assert.deepStrictEqual(out, [1999]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('MAX aggregation', async engine => {
-  const out = [];
+runOnAdapters('MAX aggregation', async (engine, adapter) => {
   const q = 'MATCH (m:Movie) RETURN MAX(m.released) AS year';
-  for await (const row of engine.run(q)) out.push(row.year);
+  const result = engine.run(q);
+  const out = [];
+  for await (const row of result) out.push(row.year);
   assert.deepStrictEqual(out, [2014]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('MIN on empty result returns null', async engine => {
-  const out = [];
+runOnAdapters('MIN on empty result returns null', async (engine, adapter) => {
   const q = 'MATCH (n:Missing) RETURN MIN(n.x) AS val';
-  for await (const row of engine.run(q)) out.push(row.val);
+  const result = engine.run(q);
+  const out = [];
+  for await (const row of result) out.push(row.val);
   assert.deepStrictEqual(out, [null]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('UNION combines results', async engine => {
