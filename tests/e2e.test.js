@@ -517,6 +517,33 @@ runOnAdapters('match with WHERE CONTAINS', async (engine, adapter) => {
   assert.deepStrictEqual(out, ['Carol']);
 });
 
+runOnAdapters('match with parameterized WHERE STARTS WITH', async (engine, adapter) => {
+  const q = 'MATCH (n:Person) WHERE n.name STARTS WITH $prefix RETURN n';
+  const result = engine.run(q, { prefix: 'A' });
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  const out = [];
+  for await (const row of result) out.push(row.n.properties.name);
+  assert.deepStrictEqual(out, ['Alice']);
+});
+
+runOnAdapters('match with parameterized WHERE ENDS WITH', async (engine, adapter) => {
+  const q = 'MATCH (n:Person) WHERE n.name ENDS WITH $suffix RETURN n';
+  const result = engine.run(q, { suffix: 'b' });
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  const out = [];
+  for await (const row of result) out.push(row.n.properties.name);
+  assert.deepStrictEqual(out, ['Bob']);
+});
+
+runOnAdapters('match with parameterized WHERE CONTAINS', async (engine, adapter) => {
+  const q = 'MATCH (n:Person) WHERE n.name CONTAINS $sub RETURN n';
+  const result = engine.run(q, { sub: 'ar' });
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  const out = [];
+  for await (const row of result) out.push(row.n.properties.name);
+  assert.deepStrictEqual(out, ['Carol']);
+});
+
 runOnAdapters('FOREACH create multiple nodes', async engine => {
   for await (const _ of engine.run('FOREACH x IN [1,2,3] CREATE (n:Batch)')) {}
   const out = [];
