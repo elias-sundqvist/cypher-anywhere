@@ -594,7 +594,7 @@ export class SqlJsAdapter implements StorageAdapter {
     const isId = retExpr.type === 'Id';
     const isLabels = retExpr.type === 'Labels';
     const isStar = retExpr.type === 'All';
-    if ((isCount || isAgg) && (retExpr as any).distinct) return null;
+    if (isAgg && (retExpr as any).distinct) return null;
     const isSimpleReturn =
       (retExpr.type === 'Variable' && retExpr.name === matchAst.variable) ||
       (retExpr.type === 'Property' && retExpr.variable === matchAst.variable) ||
@@ -605,7 +605,24 @@ export class SqlJsAdapter implements StorageAdapter {
 
     let sql = 'SELECT ';
     if (isCount) {
-      sql += 'COUNT(*) AS value';
+      if ((retExpr as any).distinct) {
+        const expr: any = (retExpr as any).expression;
+        if (!expr || expr.type === 'All' || expr.type === 'Variable') {
+          if (expr && expr.type === 'Variable' && expr.name !== matchAst.variable)
+            return null;
+          sql += 'COUNT(DISTINCT id) AS value';
+        } else if (expr.type === 'Property' && expr.variable === matchAst.variable) {
+          sql += `COUNT(DISTINCT json_extract(properties, '$.${expr.property}')) AS value`;
+        } else if (expr.type === 'Id' && expr.variable === matchAst.variable) {
+          sql += 'COUNT(DISTINCT id) AS value';
+        } else if (expr.type === 'Labels' && expr.variable === matchAst.variable) {
+          sql += 'COUNT(DISTINCT labels) AS value';
+        } else {
+          return null;
+        }
+      } else {
+        sql += 'COUNT(*) AS value';
+      }
     } else if (isAgg) {
       if (
         retExpr.type !== 'Min' &&
@@ -798,6 +815,11 @@ export class SqlJsAdapter implements StorageAdapter {
           ob.expression.variable === matchAst.variable
         ) {
           exprSql = `json_extract(properties, '$.${ob.expression.property}')`;
+        } else if (
+          ob.expression.type === 'Id' &&
+          ob.expression.variable === matchAst.variable
+        ) {
+          exprSql = 'id';
         }
         if (!exprSql) return null;
         const dir = ob.direction ? ' ' + ob.direction : '';
