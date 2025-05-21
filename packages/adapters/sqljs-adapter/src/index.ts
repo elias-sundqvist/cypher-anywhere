@@ -14,7 +14,8 @@ import {
   Expression,
   CypherAST,
   UnionQuery,
-  CallQuery
+  CallQuery,
+  WithQuery
 } from '@cypher-anywhere/core';
 import type * as fsType from 'fs';
 import initSqlJs, { Database } from 'sql.js';
@@ -544,7 +545,8 @@ export class SqlJsAdapter implements StorageAdapter {
 
   private runTranspiledAST(
     ast: CypherAST,
-    params: Record<string, any>
+    params: Record<string, any>,
+    initVars: Map<string, any> = new Map()
   ): AsyncIterable<Record<string, unknown>> | null {
     if (ast.type === 'MatchReturn') {
       const matchAst = ast as MatchReturnQuery;
@@ -586,6 +588,8 @@ export class SqlJsAdapter implements StorageAdapter {
                   ? (v as any).value
                   : v.type === 'Parameter'
                   ? params[(v as any).name]
+                  : v.type === 'Variable'
+                  ? initVars.get((v as any).name)
                   : undefined
                 : v;
             if (val === null) {
@@ -690,7 +694,7 @@ export class SqlJsAdapter implements StorageAdapter {
         stmt.bind(paramsArr);
         while (stmt.step()) {
           const rel = self.rowToRel(stmt.getAsObject());
-          const vars = new Map<string, any>();
+          const vars = new Map(initVars);
           vars.set(matchAst.variable, rel);
           const row: Record<string, any> = {};
           matchAst.returnItems.forEach((item, idx) => {
@@ -770,6 +774,11 @@ export class SqlJsAdapter implements StorageAdapter {
     let sql = 'SELECT id, labels, properties FROM nodes';
     const paramsArr: any[] = [];
     const conds: string[] = [];
+    const boundNode = initVars.get(matchAst.variable) as NodeRecord | undefined;
+    if (boundNode) {
+      conds.push('id = ?');
+      paramsArr.push(boundNode.id);
+    }
     if (matchAst.labels && matchAst.labels.length > 0) {
       for (const lbl of matchAst.labels) {
         conds.push('labels LIKE ?');
@@ -784,6 +793,8 @@ export class SqlJsAdapter implements StorageAdapter {
               ? (v as any).value
               : v.type === 'Parameter'
               ? params[(v as any).name]
+              : v.type === 'Variable'
+              ? initVars.get((v as any).name)
               : undefined
             : v;
         if (val === null) {
@@ -800,6 +811,7 @@ export class SqlJsAdapter implements StorageAdapter {
       if (typeof expr === 'object' && 'type' in expr) {
         if (expr.type === 'Literal') return expr.value;
         if (expr.type === 'Parameter') return params[expr.name];
+        if (expr.type === 'Variable') return initVars.get(expr.name);
       }
       return expr;
     }
@@ -906,7 +918,7 @@ export class SqlJsAdapter implements StorageAdapter {
       let rows: { row: Record<string, any>; order?: any[] }[] = [];
       if (hasAgg) {
         const groups = new Map<string, { row: Record<string, any>; aggs: any[]; record?: NodeRecord }>();
-        const vars = new Map<string, any>();
+        const vars = new Map(initVars);
         for (const node of results) {
           vars.set(matchAst.variable, node);
           const keyParts: any[] = [];
@@ -936,7 +948,7 @@ export class SqlJsAdapter implements StorageAdapter {
           groups.set('__empty__', { row: {}, aggs: [] });
         }
         for (const group of groups.values()) {
-          const localVars = new Map<string, any>();
+          const localVars = new Map(initVars);
           if (group.record) localVars.set(matchAst.variable, group.record);
           matchAst.returnItems.forEach((item, idx) => {
             if (!hasAggItem[idx]) return;
@@ -961,7 +973,7 @@ export class SqlJsAdapter implements StorageAdapter {
         }
       } else {
         for (const node of results) {
-          const vars = new Map<string, any>();
+          const vars = new Map(initVars);
           vars.set(matchAst.variable, node);
           const row: Record<string, any> = {};
           const aliasVars = new Map(vars);
@@ -1109,6 +1121,8 @@ export class SqlJsAdapter implements StorageAdapter {
                   ? (v as any).value
                   : v.type === 'Parameter'
                   ? params[(v as any).name]
+                  : v.type === 'Variable'
+                  ? initVars.get((v as any).name)
                   : undefined
                 : v;
             if (val === null) {
@@ -1242,11 +1256,11 @@ export class SqlJsAdapter implements StorageAdapter {
         };
 
         const groupMap = new Map<string, any>();
-        traverse(0, new Map<string, any>());
+        traverse(0, new Map(initVars));
 
         if (hasAgg) {
           if (groupMap.size === 0 && hasAggItem.every(v => v)) {
-            groupMap.set('__empty__', { row: {}, aggs: [], vars: new Map<string, any>() });
+            groupMap.set('__empty__', { row: {}, aggs: [], vars: new Map(initVars) });
           }
           for (const group of groupMap.values()) {
             const aliasVars = new Map<string, any>(group.vars);
@@ -1434,6 +1448,23 @@ export class SqlJsAdapter implements StorageAdapter {
         }
         const conds: string[] = [];
         const paramsArr: any[] = [];
+        const boundStart = initVars.get(chain.start.variable) as NodeRecord | undefined;
+        if (boundStart) {
+          conds.push('n1.id = ?');
+          paramsArr.push(boundStart.id);
+        }
+        if (hop.rel.variable) {
+          const boundRel = initVars.get(hop.rel.variable) as RelRecord | undefined;
+          if (boundRel) {
+            conds.push('e.id = ?');
+            paramsArr.push(boundRel.id);
+          }
+        }
+        const boundEnd = initVars.get(hop.node.variable) as NodeRecord | undefined;
+        if (boundEnd) {
+          conds.push('n2.id = ?');
+          paramsArr.push(boundEnd.id);
+        }
         if (hop.rel.type) {
           conds.push('e.type = ?');
           paramsArr.push(hop.rel.type);
@@ -1446,6 +1477,8 @@ export class SqlJsAdapter implements StorageAdapter {
                   ? (v as any).value
                   : v.type === 'Parameter'
                   ? params[(v as any).name]
+                  : v.type === 'Variable'
+                  ? initVars.get((v as any).name)
                   : undefined
                 : v;
             if (val === null) {
@@ -1470,6 +1503,8 @@ export class SqlJsAdapter implements StorageAdapter {
                   ? (v as any).value
                   : v.type === 'Parameter'
                   ? params[(v as any).name]
+                  : v.type === 'Variable'
+                  ? initVars.get((v as any).name)
                   : undefined
                 : v;
             if (val === null) {
@@ -1526,7 +1561,7 @@ export class SqlJsAdapter implements StorageAdapter {
             endNode: rowObj.eend,
             properties: rowObj.eprops,
           });
-          const varsMap = new Map<string, any>();
+          const varsMap = new Map(initVars);
           varsMap.set(chain.start.variable, n1);
           varsMap.set(hop.node.variable, n2);
           if (hop.rel.variable) varsMap.set(hop.rel.variable, rel);
@@ -1562,11 +1597,11 @@ export class SqlJsAdapter implements StorageAdapter {
         if (Array.isArray(un.list)) {
           items = un.list;
         } else {
-          const v = self.evalExpr(un.list, new Map(), params);
+          const v = self.evalExpr(un.list, new Map(initVars), params);
           items = Array.isArray(v) ? v : [];
         }
         for (const item of items) {
-          const vars = new Map<string, any>();
+          const vars = new Map(initVars);
           vars.set(un.variable, item);
           const val = self.evalExpr(un.returnExpression, vars, params);
           const alias =
@@ -1591,12 +1626,12 @@ export class SqlJsAdapter implements StorageAdapter {
       const self = this;
       async function* genReturn() {
         const row: Record<string, any> = {};
-        const aliasVars = new Map<string, any>();
+        const aliasVars = new Map(initVars);
         ret.returnItems.forEach((item, idx) => {
           if (item.expression.type === 'All') {
             // nothing in vars map
           } else {
-            const val = self.evalExpr(item.expression, new Map(), params);
+            const val = self.evalExpr(item.expression, aliasVars, params);
             const alias = aliasFor(item, idx);
             row[alias] = val;
             if (item.alias) aliasVars.set(item.alias, val);
@@ -1604,8 +1639,8 @@ export class SqlJsAdapter implements StorageAdapter {
         });
         let include = true;
         let start = 0;
-        if (ret.skip) start = Number(self.evalExpr(ret.skip, new Map(), params));
-        let limit = ret.limit ? Number(self.evalExpr(ret.limit, new Map(), params)) : undefined;
+        if (ret.skip) start = Number(self.evalExpr(ret.skip, aliasVars, params));
+        let limit = ret.limit ? Number(self.evalExpr(ret.limit, aliasVars, params)) : undefined;
         if (start > 0) include = false;
         if (include) {
           if (limit === undefined || limit > 0) {
@@ -1618,8 +1653,8 @@ export class SqlJsAdapter implements StorageAdapter {
 
     if (ast.type === 'Union') {
       const u = ast as UnionQuery;
-      const leftIter = this.runTranspiledAST(u.left, params);
-      const rightIter = this.runTranspiledAST(u.right, params);
+      const leftIter = this.runTranspiledAST(u.left, params, initVars);
+      const rightIter = this.runTranspiledAST(u.right, params, initVars);
       if (!leftIter || !rightIter) return null;
       const self = this;
       async function* genUnion() {
@@ -1675,6 +1710,64 @@ export class SqlJsAdapter implements StorageAdapter {
       }
       return genUnion();
     }
+
+    if (ast.type === 'With') {
+      const w = ast as WithQuery;
+      const srcIter = this.runTranspiledAST(w.source, params, initVars);
+      if (!srcIter) return null;
+      const self = this;
+      function evalWhere(where: any, map: Map<string, any>): boolean {
+        if (!where) return true;
+        if (where.type === 'Condition') {
+          const left = self.evalExpr(where.left, map, params);
+          const right = where.right ? self.evalExpr(where.right, map, params) : undefined;
+          switch (where.operator) {
+            case '=':
+              return left === right;
+            case '<>':
+              return left !== right;
+            case '>':
+              return left > right;
+            case '>=':
+              return left >= right;
+            case '<':
+              return left < right;
+            case '<=':
+              return left <= right;
+            case 'IN':
+              return Array.isArray(right) && right.includes(left);
+            case 'IS NULL':
+              return left === null || left === undefined;
+            case 'IS NOT NULL':
+              return left !== null && left !== undefined;
+            case 'STARTS WITH':
+              return typeof left === 'string' && typeof right === 'string' && left.startsWith(right);
+            case 'ENDS WITH':
+              return typeof left === 'string' && typeof right === 'string' && left.endsWith(right);
+            case 'CONTAINS':
+              return typeof left === 'string' && typeof right === 'string' && left.includes(right);
+            default:
+              return false;
+          }
+        }
+        if (where.type === 'And') return evalWhere(where.left, map) && evalWhere(where.right, map);
+        if (where.type === 'Or') return evalWhere(where.left, map) || evalWhere(where.right, map);
+        if (where.type === 'Not') return !evalWhere(where.clause, map);
+        return false;
+      }
+      async function* genWith() {
+        for await (const row of srcIter!) {
+          const varsMap = new Map(initVars);
+          for (const [k, v] of Object.entries(row)) varsMap.set(k, v);
+          if (w.where && !evalWhere(w.where, varsMap)) continue;
+          const iter = self.runTranspiledAST(w.next, params, varsMap);
+          if (!iter) return null;
+          for await (const r of iter) yield r;
+        }
+      }
+      return genWith();
+    }
+
     return null;
   }
 
@@ -1818,6 +1911,6 @@ export class SqlJsAdapter implements StorageAdapter {
       }
       return genCall();
     }
-    return this.runTranspiledAST(ast, params);
+    return this.runTranspiledAST(ast, params, new Map());
   }
 }

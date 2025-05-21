@@ -1491,11 +1491,15 @@ runOnAdapters('labels() function returns node labels', async (engine, adapter) =
   }
 });
 
-runOnAdapters('WITH alias named id allowed', async engine => {
+runOnAdapters('WITH alias named id allowed', async (engine, adapter) => {
   const q = 'MATCH (n:Person {name:"Alice"}) WITH id(n) AS id RETURN id';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.id);
+  for await (const row of result) out.push(row.id);
   assert.deepStrictEqual(out, [1]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('standalone RETURN expression', async (engine, adapter) => {
@@ -1533,56 +1537,84 @@ runOnAdapters('NULL in arithmetic returns NULL', async (engine, adapter) => {
   }
 });
 
-runOnAdapters('WITH passes variable to subsequent MATCH', async engine => {
+runOnAdapters('WITH passes variable to subsequent MATCH', async (engine, adapter) => {
   const q =
     'MATCH (p:Person {name:"Alice"}) WITH p MATCH (p)-[:ACTED_IN]->(m) RETURN m.title AS title';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.title);
+  for await (const row of result) out.push(row.title);
   assert.deepStrictEqual(out.sort(), ['John Wick', 'The Matrix']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('WITH after relationship chain returns nodes', async engine => {
+runOnAdapters('WITH after relationship chain returns nodes', async (engine, adapter) => {
   const q = 'MATCH (p:Person)-[:ACTED_IN]->(m:Movie) WITH m RETURN m.title AS title';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.title);
+  for await (const row of result) out.push(row.title);
   assert.deepStrictEqual(out.sort(), ['John Wick', 'John Wick', 'The Matrix']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
-runOnAdapters('top-level WITH returns value', async engine => {
+runOnAdapters('top-level WITH returns value', async (engine, adapter) => {
+  const result = engine.run('WITH 1 AS x RETURN x');
   const out = [];
-  for await (const row of engine.run('WITH 1 AS x RETURN x')) out.push(row.x);
+  for await (const row of result) out.push(row.x);
   assert.deepStrictEqual(out, [1]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
-runOnAdapters('WITH with WHERE filters rows', async engine => {
+runOnAdapters('WITH with WHERE filters rows', async (engine, adapter) => {
   const q = 'MATCH (p:Person) WITH p WHERE p.name = "Alice" RETURN p';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.p);
+  for await (const row of result) out.push(row.p);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('WITH star passes through variables', async engine => {
+runOnAdapters('WITH star passes through variables', async (engine, adapter) => {
   const q = 'MATCH (p:Person {name:"Alice"}) WITH * RETURN p';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.p);
+  for await (const row of result) out.push(row.p);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('WITH preserves variable across simple MATCH', async engine => {
+runOnAdapters('WITH preserves variable across simple MATCH', async (engine, adapter) => {
   const q = 'MATCH (p:Person {name:"Alice"}) WITH p MATCH (p) RETURN p';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.p);
+  for await (const row of result) out.push(row.p);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('alias used in subsequent pattern property', async engine => {
+runOnAdapters('alias used in subsequent pattern property', async (engine, adapter) => {
   const q =
     'MATCH (p:Person {name:"Alice"}) WITH p.name AS nm MATCH (n:Person {name:nm}) RETURN n';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.n);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('quoted identifiers for label, variable and property', async engine => {
