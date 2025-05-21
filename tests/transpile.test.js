@@ -429,3 +429,47 @@ test('transpile WHERE id equality parameter', () => {
   );
   assert.deepStrictEqual(result.params, [3]);
 });
+
+test('transpile WHERE id greater than constant', () => {
+  const q = 'MATCH (n) WHERE id(n) > 2 RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE id > ?'
+  );
+  assert.deepStrictEqual(result.params, [2]);
+});
+
+test('transpile WHERE id not equal', () => {
+  const q = 'MATCH (n) WHERE id(n) <> 1 RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE id <> ?'
+  );
+  assert.deepStrictEqual(result.params, [1]);
+});
+
+test('transpile WHERE id IN parameter list', () => {
+  const q = 'MATCH (n) WHERE id(n) IN $ids RETURN n';
+  const result = adapter.transpile(q, { ids: [1, 2] });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE id IN (?, ?)'
+  );
+  assert.deepStrictEqual(result.params, [1, 2]);
+});
+
+test('transpile WHERE id >= parameter', () => {
+  const q = 'MATCH (n) WHERE id(n) >= $min RETURN n';
+  const result = adapter.transpile(q, { min: 1 });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE id >= ?'
+  );
+  assert.deepStrictEqual(result.params, [1]);
+});

@@ -191,6 +191,24 @@ runOnAdapters('match node by id', async (engine, adapter) => {
   assert.strictEqual(out[0].properties.name, 'Alice');
 });
 
+runOnAdapters('match nodes by id list', async (engine, adapter) => {
+  const q = 'MATCH (n) WHERE id(n) IN [1,2] RETURN n';
+  const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  const ids = [];
+  for await (const row of result) ids.push(row.n.id);
+  assert.deepStrictEqual(ids.sort(), [1, 2]);
+});
+
+runOnAdapters('match nodes by parameterized id list', async (engine, adapter) => {
+  const q = 'MATCH (n) WHERE id(n) IN $ids RETURN n';
+  const result = engine.run(q, { ids: [1, 2] });
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  const ids = [];
+  for await (const row of result) ids.push(row.n.id);
+  assert.deepStrictEqual(ids.sort(), [1, 2]);
+});
+
 runOnAdapters('create node with multiple labels', async engine => {
   let node;
   for await (const row of engine.run('CREATE (n:Multi:One {v:1}) RETURN n')) node = row.n;
