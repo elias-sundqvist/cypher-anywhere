@@ -506,6 +506,17 @@ test('transpile ORDER BY with SKIP and LIMIT', () => {
   assert.deepStrictEqual(result.params, ['%"Person"%']);
 });
 
+test('transpile ORDER BY id', () => {
+  const q = 'MATCH (n:Person) RETURN n ORDER BY id(n) DESC';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? ORDER BY id DESC'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
 test('transpile RETURN node with LIMIT', () => {
   const q = 'MATCH (n:Person) RETURN n LIMIT 1';
   const result = adapter.transpile(q);
@@ -539,6 +550,17 @@ test('transpile parameterized SKIP', () => {
   assert.deepStrictEqual(result.params, ['%"Person"%']);
 });
 
+test('transpile parameterized LIMIT', () => {
+  const q = 'MATCH (n:Person) RETURN n LIMIT $lim';
+  const result = adapter.transpile(q, { lim: 2 });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? LIMIT 2'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
 test('transpile WHERE id IN parameter list', () => {
   const q = 'MATCH (n) WHERE id(n) IN $ids RETURN n';
   const result = adapter.transpile(q, { ids: [1, 2] });
@@ -557,6 +579,28 @@ test('transpile COUNT without variable', () => {
   assert.strictEqual(
     result.sql,
     'SELECT COUNT(*) AS value FROM nodes WHERE labels LIKE ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile COUNT DISTINCT property', () => {
+  const q = 'MATCH (p:Person) RETURN COUNT(DISTINCT p.name) AS cnt';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT COUNT(DISTINCT json_extract(properties, '$.name')) AS value FROM nodes WHERE labels LIKE ?"
+  );
+  assert.deepStrictEqual(result.params, ['%\"Person\"%']);
+});
+
+test('transpile COUNT DISTINCT star', () => {
+  const q = 'MATCH (p:Person) RETURN COUNT(DISTINCT *) AS cnt';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT COUNT(DISTINCT id) AS value FROM nodes WHERE labels LIKE ?'
   );
   assert.deepStrictEqual(result.params, ['%"Person"%']);
 });

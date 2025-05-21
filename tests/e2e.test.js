@@ -1001,6 +1001,7 @@ runOnAdapters('COUNT DISTINCT aggregation', async (engine, adapter) => {
   for await (const _ of engine.run('CREATE (n:Person {name:"Bob"})')) {}
   const q = 'MATCH (p:Person) RETURN COUNT(DISTINCT p.name) AS cnt';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.cnt);
   assert.strictEqual(out[0], 3);
@@ -1009,6 +1010,7 @@ runOnAdapters('COUNT DISTINCT aggregation', async (engine, adapter) => {
 runOnAdapters('COUNT DISTINCT star counts rows', async (engine, adapter) => {
   const q = 'MATCH (p:Person) RETURN COUNT(DISTINCT *) AS cnt';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.cnt);
   assert.strictEqual(out[0], 3);
