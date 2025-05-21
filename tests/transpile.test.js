@@ -47,3 +47,102 @@ test('transpile with WHERE IN list', () => {
   assert.strictEqual(result.sql, 'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.name\') IN (?, ?)');
   assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice', 'Bob']);
 });
+
+test('transpile with WHERE NOT', () => {
+  const q = 'MATCH (n:Person) WHERE NOT n.name = "Alice" RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND NOT (json_extract(properties, \'$.name\') = ?)'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice']);
+});
+
+test('transpile with WHERE OR', () => {
+  const q = 'MATCH (n:Person) WHERE n.name = "Alice" OR n.name = "Bob" RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND (json_extract(properties, \'$.name\') = ? OR json_extract(properties, \'$.name\') = ?)'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice', 'Bob']);
+});
+
+test('transpile with WHERE IS NULL', () => {
+  const q = 'MATCH (n:Person) WHERE n.age IS NULL RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.age\') IS NULL'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile with WHERE IS NOT NULL', () => {
+  const q = 'MATCH (n:Person) WHERE n.age IS NOT NULL RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.age\') IS NOT NULL'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile with WHERE STARTS WITH', () => {
+  const q = 'MATCH (n:Person) WHERE n.name STARTS WITH "Al" RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.name\') LIKE ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Al%']);
+});
+
+test('transpile with WHERE ENDS WITH', () => {
+  const q = 'MATCH (n:Person) WHERE n.name ENDS WITH "ce" RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.name\') LIKE ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', '%ce']);
+});
+
+test('transpile with WHERE CONTAINS', () => {
+  const q = 'MATCH (n:Person) WHERE n.name CONTAINS "li" RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.name\') LIKE ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', '%li%']);
+});
+
+test('transpile with WHERE not equals', () => {
+  const q = 'MATCH (n:Person) WHERE n.name <> "Alice" RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.name\') <> ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice']);
+});
+
+test('transpile IN empty list yields constant false', () => {
+  const q = 'MATCH (n:Person) WHERE n.name IN [] RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND 0'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
