@@ -50,6 +50,7 @@ function runOnAdapters(name, fn) {
 
 runOnAdapters('MATCH all nodes', async (engine, adapter) => {
   const result = engine.run('MATCH (n) RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, baseData.nodes.length);
@@ -155,10 +156,12 @@ runOnAdapters('merge relationship between existing nodes', async engine => {
   assert.strictEqual(out.length, 1);
 });
 
-runOnAdapters('create node with label', async engine => {
+runOnAdapters('create node with label', async (engine, adapter) => {
   for await (const _ of engine.run('CREATE (n:Tester {name:"Greg"})')) {}
   const out = [];
-  for await (const row of engine.run('MATCH (n:Tester {name:"Greg"}) RETURN n')) out.push(row.n);
+  const result = engine.run('MATCH (n:Tester {name:"Greg"}) RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
 });
 
@@ -879,6 +882,7 @@ runOnAdapters('MATCH with parameter property', async (engine, adapter) => {
 runOnAdapters('WHERE clause with parameter', async (engine, adapter) => {
   const q = 'MATCH (m:Movie) WHERE m.released > $year RETURN m';
   const result = engine.run(q, { year: 2000 });
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.m);
   assert.strictEqual(out.length, 1);
@@ -887,6 +891,7 @@ runOnAdapters('WHERE clause with parameter', async (engine, adapter) => {
 
 runOnAdapters('WHERE IS NULL matches missing property', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person) WHERE n.age IS NULL RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 3);
@@ -895,6 +900,7 @@ runOnAdapters('WHERE IS NULL matches missing property', async (engine, adapter) 
 runOnAdapters('WHERE IS NOT NULL matches existing property', async (engine, adapter) => {
   for await (const _ of engine.run('MATCH (n:Person {name:"Bob"}) SET n.age = 30')) {}
   const result = engine.run('MATCH (n:Person) WHERE n.age IS NOT NULL RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
