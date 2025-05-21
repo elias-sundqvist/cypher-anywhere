@@ -191,6 +191,15 @@ runOnAdapters('match node by id', async (engine, adapter) => {
   assert.strictEqual(out[0].properties.name, 'Alice');
 });
 
+runOnAdapters('match nodes by id comparison', async (engine, adapter) => {
+  const q = 'MATCH (n:Person) WHERE id(n) <= 2 RETURN n.name AS name ORDER BY id(n)';
+  const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  const out = [];
+  for await (const row of result) out.push(row.name);
+  assert.deepStrictEqual(out, ['Alice', 'Bob']);
+});
+
 runOnAdapters('create node with multiple labels', async engine => {
   let node;
   for await (const row of engine.run('CREATE (n:Multi:One {v:1}) RETURN n')) node = row.n;
@@ -894,6 +903,15 @@ runOnAdapters('ORDER BY multiple expressions', async (engine, adapter) => {
   assert.deepStrictEqual(out, ['2014-Extra', '2014-John Wick', '1999-The Matrix']);
 });
 
+runOnAdapters('ORDER BY id() DESC', async (engine, adapter) => {
+  const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY id(n) DESC';
+  const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  const names = [];
+  for await (const row of result) names.push(row.name);
+  assert.deepStrictEqual(names, ['Carol', 'Bob', 'Alice']);
+});
+
 runOnAdapters('RETURN multiple expressions with aliases', async (engine, adapter) => {
   const q = 'MATCH (m:Movie) RETURN m.title AS title, m.released AS year ORDER BY year';
   const result = engine.run(q);
@@ -1081,6 +1099,15 @@ runOnAdapters('MAX aggregation', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.year);
   assert.deepStrictEqual(out, [2014]);
+});
+
+runOnAdapters('AVG aggregation', async (engine, adapter) => {
+  const q = 'MATCH (m:Movie) RETURN AVG(m.released) AS avg';
+  const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  const out = [];
+  for await (const row of result) out.push(row.avg);
+  assert.deepStrictEqual(out, [(1999 + 2014) / 2]);
 });
 
 runOnAdapters('MIN on empty result returns null', async (engine, adapter) => {

@@ -788,6 +788,11 @@ export class SqlJsAdapter implements StorageAdapter {
             exprSql = `json_extract(properties, '$.${prop}')`;
           }
         } else if (
+          ob.expression.type === 'Id' &&
+          ob.expression.variable === matchAst.variable
+        ) {
+          exprSql = 'id';
+        } else if (
           ob.expression.type === 'Property' &&
           ob.expression.variable === matchAst.variable
         ) {

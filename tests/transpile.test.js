@@ -604,3 +604,47 @@ test('transpile SUM aggregation', () => {
   );
   assert.deepStrictEqual(result.params, ['%"Movie"%']);
 });
+
+test('transpile AVG aggregation', () => {
+  const q = 'MATCH (m:Movie) RETURN AVG(m.released) AS avg';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT AVG(json_extract(properties, '$.released')) AS avg FROM nodes WHERE labels LIKE ?"
+  );
+  assert.deepStrictEqual(result.params, ['%"Movie"%']);
+});
+
+test('transpile ORDER BY variable', () => {
+  const q = 'MATCH (n:Person) RETURN n ORDER BY n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? ORDER BY id'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile ORDER BY id function', () => {
+  const q = 'MATCH (n:Person) RETURN n ORDER BY id(n) DESC';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? ORDER BY id DESC'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile WHERE id <= comparison', () => {
+  const q = 'MATCH (n) WHERE id(n) <= 2 RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE id <= ?'
+  );
+  assert.deepStrictEqual(result.params, [2]);
+});
