@@ -574,9 +574,6 @@ export class SqlJsAdapter implements StorageAdapter {
   ): { sql: string; params: any[] } | null {
     if (
       matchAst.isRelationship ||
-      matchAst.orderBy ||
-      matchAst.skip ||
-      matchAst.limit ||
       matchAst.distinct ||
       matchAst.returnItems.length !== 1
     )
@@ -588,14 +585,22 @@ export class SqlJsAdapter implements StorageAdapter {
     if (
       !isCount &&
       (matchAst.optional ||
-        retExpr.type !== 'Variable' ||
-        retExpr.name !== matchAst.variable)
+        !(
+          (retExpr.type === 'Variable' && retExpr.name === matchAst.variable) ||
+          (retExpr.type === 'Property' && retExpr.variable === matchAst.variable)
+        ))
     )
       return null;
 
-    let sql = isCount
-      ? 'SELECT COUNT(*) AS value FROM nodes'
-      : 'SELECT id, labels, properties FROM nodes';
+    let sql = 'SELECT ';
+    if (isCount) {
+      sql += 'COUNT(*) AS value';
+    } else if (retExpr.type === 'Variable') {
+      sql += 'id, labels, properties';
+    } else {
+      sql += `json_extract(properties, '$.${(retExpr as any).property}') AS value`;
+    }
+    sql += ' FROM nodes';
     const paramsArr: any[] = [];
     const conds: string[] = [];
     if (matchAst.labels && matchAst.labels.length > 0) {
@@ -724,6 +729,43 @@ export class SqlJsAdapter implements StorageAdapter {
       paramsArr.push(...whereSql[1]);
     }
     if (conds.length > 0) sql += ' WHERE ' + conds.join(' AND ');
+
+    if (matchAst.orderBy && matchAst.orderBy.length > 0) {
+      const orderParts: string[] = [];
+      for (const ob of matchAst.orderBy) {
+        let exprSql: string | null = null;
+        if (ob.expression.type === 'Variable') {
+          if (ob.expression.name === matchAst.variable) {
+            exprSql = 'id';
+          } else if (matchAst.returnItems[0].alias === ob.expression.name) {
+            if (retExpr.type === 'Variable') exprSql = 'id';
+            else exprSql = `json_extract(properties, '$.${(retExpr as any).property}')`;
+          }
+        } else if (
+          ob.expression.type === 'Property' &&
+          ob.expression.variable === matchAst.variable
+        ) {
+          exprSql = `json_extract(properties, '$.${ob.expression.property}')`;
+        }
+        if (!exprSql) return null;
+        const dir = ob.direction ? ' ' + ob.direction : '';
+        orderParts.push(`${exprSql}${dir}`);
+      }
+      sql += ' ORDER BY ' + orderParts.join(', ');
+    }
+
+    if (matchAst.limit) {
+      const lim = toValue(matchAst.limit);
+      if (typeof lim !== 'number') return null;
+      sql += ' LIMIT ' + lim;
+    }
+    if (matchAst.skip) {
+      const off = toValue(matchAst.skip);
+      if (typeof off !== 'number') return null;
+      if (!matchAst.limit) sql += ' LIMIT -1';
+      sql += ' OFFSET ' + off;
+    }
+
     return { sql, params: paramsArr };
   }
 

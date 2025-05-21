@@ -859,6 +859,7 @@ runOnAdapters('OPTIONAL MATCH relationship chain missing returns null row', asyn
 runOnAdapters('ORDER BY with SKIP and LIMIT', async (engine, adapter) => {
   const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY n.name SKIP 1 LIMIT 1';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Bob']);
@@ -867,6 +868,7 @@ runOnAdapters('ORDER BY with SKIP and LIMIT', async (engine, adapter) => {
 runOnAdapters('ORDER BY DESC', async (engine, adapter) => {
   const q = 'MATCH (m:Movie) RETURN m.released AS year ORDER BY year DESC';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.year);
   assert.deepStrictEqual(out, [2014, 1999]);
@@ -893,6 +895,7 @@ runOnAdapters('RETURN multiple expressions with aliases', async (engine, adapter
 runOnAdapters('LIMIT with parameter', async (engine, adapter) => {
   const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY name LIMIT $lim';
   const result = engine.run(q, { lim: 2 });
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Alice', 'Bob']);
@@ -901,6 +904,7 @@ runOnAdapters('LIMIT with parameter', async (engine, adapter) => {
 runOnAdapters('SKIP with parameter', async (engine, adapter) => {
   const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY name SKIP $s';
   const result = engine.run(q, { s: 1 });
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Bob', 'Carol']);
