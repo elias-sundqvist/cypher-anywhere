@@ -731,12 +731,16 @@ runOnAdapters('multi-hop chain length 3', async engine => {
   assert.strictEqual(out[0].properties.name, 'Thriller');
 });
 
-runOnAdapters('relationship chain with WHERE filters results', async engine => {
+runOnAdapters('relationship chain with WHERE filters results', async (engine, adapter) => {
   const out = [];
   const q =
     'MATCH (p:Person)-[:ACTED_IN]->(m:Movie) WHERE m.released > 2000 RETURN m.title AS title';
-  for await (const row of engine.run(q)) out.push(row.title);
+  const result = engine.run(q);
+  for await (const row of result) out.push(row.title);
   assert.deepStrictEqual(out.sort(), ['John Wick', 'John Wick']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('return numeric addition expression', async engine => {
@@ -1272,60 +1276,88 @@ runOnAdapters('CALL with ORDER BY SKIP LIMIT', async (engine, adapter) => {
   }
 });
 
-runOnAdapters('single hop match without rel variable', async engine => {
+runOnAdapters('single hop match without rel variable', async (engine, adapter) => {
   const q = 'MATCH (p:Person)-[:ACTED_IN]->(m:Movie) RETURN p, m';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(`${row.p.properties.name}-${row.m.properties.title}`);
+  for await (const row of result) out.push(`${row.p.properties.name}-${row.m.properties.title}`);
   const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
   assert.deepStrictEqual(out.sort(), expected.sort());
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('single hop incoming match without rel variable', async engine => {
+runOnAdapters('single hop incoming match without rel variable', async (engine, adapter) => {
   const q = 'MATCH (m:Movie)<-[:ACTED_IN]-(p:Person) RETURN p, m';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(`${row.p.properties.name}-${row.m.properties.title}`);
+  for await (const row of result) out.push(`${row.p.properties.name}-${row.m.properties.title}`);
   const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
   assert.deepStrictEqual(out.sort(), expected.sort());
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('single hop match without labels', async engine => {
+runOnAdapters('single hop match without labels', async (engine, adapter) => {
   const q = 'MATCH (a)-[:ACTED_IN]->(b) RETURN a, b';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(`${row.a.properties.name}-${row.b.properties.title}`);
+  for await (const row of result) out.push(`${row.a.properties.name}-${row.b.properties.title}`);
   const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
   assert.deepStrictEqual(out.sort(), expected.sort());
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('single hop match without start variable', async engine => {
+runOnAdapters('single hop match without start variable', async (engine, adapter) => {
   const q = 'MATCH (:Person)-[:ACTED_IN]->(m:Movie) RETURN m';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.m.properties.title);
+  for await (const row of result) out.push(row.m.properties.title);
   const expected = ['The Matrix', 'John Wick', 'John Wick'];
   assert.deepStrictEqual(out.sort(), expected.sort());
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('single hop match returning only target node', async engine => {
+runOnAdapters('single hop match returning only target node', async (engine, adapter) => {
   const q = 'MATCH (a)-[r:ACTED_IN]->(b) RETURN b';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.b.properties.title);
+  for await (const row of result) out.push(row.b.properties.title);
   const expected = ['The Matrix', 'John Wick', 'John Wick'];
   assert.deepStrictEqual(out.sort(), expected.sort());
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('single hop match returning only source node', async engine => {
+runOnAdapters('single hop match returning only source node', async (engine, adapter) => {
   const q = 'MATCH (a)-[r:ACTED_IN]->(b) RETURN a';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.a.properties.name);
+  for await (const row of result) out.push(row.a.properties.name);
   const expected = ['Alice', 'Alice', 'Bob'];
   assert.deepStrictEqual(out.sort(), expected.sort());
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('single hop incoming match without labels', async engine => {
+runOnAdapters('single hop incoming match without labels', async (engine, adapter) => {
   const q = 'MATCH (b)<-[:ACTED_IN]-(a) RETURN a, b';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(`${row.a.properties.name}-${row.b.properties.title}`);
+  for await (const row of result) out.push(`${row.a.properties.name}-${row.b.properties.title}`);
   const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
   assert.deepStrictEqual(out.sort(), expected.sort());
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('undirected single hop match', async engine => {

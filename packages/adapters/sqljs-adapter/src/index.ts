@@ -8,6 +8,7 @@ import {
   parseMany,
   MatchReturnQuery,
   MatchMultiReturnQuery,
+  MatchChainQuery,
   ReturnQuery,
   UnwindQuery,
   Expression,
@@ -1326,6 +1327,231 @@ export class SqlJsAdapter implements StorageAdapter {
       }
 
       return genMulti();
+    }
+
+    if (ast.type === 'MatchChain') {
+      const chain = ast as MatchChainQuery;
+      if (
+        chain.hops.length !== 1 ||
+        chain.orderBy ||
+        chain.skip ||
+        chain.limit ||
+        chain.distinct ||
+        chain.optional ||
+        chain.pathVariable
+      )
+        return null;
+      const hop = chain.hops[0];
+      if (hop.rel.direction === 'none') return null;
+      const vars = [chain.start.variable, hop.node.variable];
+      if (hop.rel.variable) vars.push(hop.rel.variable);
+      function checkExpr(expr: Expression): boolean {
+        switch (expr.type) {
+          case 'Variable':
+            return vars.includes(expr.name);
+          case 'Property':
+          case 'Id':
+          case 'Labels':
+            return vars.includes(expr.variable);
+          case 'Literal':
+          case 'Parameter':
+            return true;
+          case 'Add':
+          case 'Sub':
+          case 'Mul':
+          case 'Div':
+            return checkExpr(expr.left) && checkExpr(expr.right);
+          case 'Neg':
+            return checkExpr(expr.expression);
+          case 'Count':
+          case 'Sum':
+          case 'Min':
+          case 'Max':
+          case 'Avg':
+          case 'Collect':
+            return expr.expression ? checkExpr(expr.expression) : true;
+          case 'Length':
+            return checkExpr(expr.expression);
+          case 'All':
+            return chain.returnItems.length === 1;
+          default:
+            return false;
+        }
+      }
+      for (const ri of chain.returnItems) if (!checkExpr(ri.expression)) return null;
+      const self = this;
+
+      function evalWhere(where: any, map: Map<string, any>): boolean {
+        if (!where) return true;
+        if (where.type === 'Condition') {
+          const left = self.evalExpr(where.left, map, params);
+          const right = where.right ? self.evalExpr(where.right, map, params) : undefined;
+          switch (where.operator) {
+            case '=':
+              return left === right;
+            case '<>':
+              return left !== right;
+            case '>':
+              return left > right;
+            case '>=':
+              return left >= right;
+            case '<':
+              return left < right;
+            case '<=':
+              return left <= right;
+            case 'IN':
+              return Array.isArray(right) && right.includes(left);
+            case 'IS NULL':
+              return left === null || left === undefined;
+            case 'IS NOT NULL':
+              return left !== null && left !== undefined;
+            case 'STARTS WITH':
+              return typeof left === 'string' && typeof right === 'string' && left.startsWith(right);
+            case 'ENDS WITH':
+              return typeof left === 'string' && typeof right === 'string' && left.endsWith(right);
+            case 'CONTAINS':
+              return typeof left === 'string' && typeof right === 'string' && left.includes(right);
+            default:
+              return false;
+          }
+        }
+        if (where.type === 'And') return evalWhere(where.left, map) && evalWhere(where.right, map);
+        if (where.type === 'Or') return evalWhere(where.left, map) || evalWhere(where.right, map);
+        if (where.type === 'Not') return !evalWhere(where.clause, map);
+        return false;
+      }
+
+      async function* genChain() {
+        await self.ensureReady();
+        let sql =
+          'SELECT n1.id as n1id, n1.labels as n1labels, n1.properties as n1props,' +
+          ' e.id as eid, e.type as etype, e.startNode as estart, e.endNode as eend, e.properties as eprops,' +
+          ' n2.id as n2id, n2.labels as n2labels, n2.properties as n2props FROM nodes n1 JOIN edges e ';
+        if (hop.rel.direction === 'out') {
+          sql += 'ON e.startNode = n1.id JOIN nodes n2 ON e.endNode = n2.id';
+        } else {
+          sql += 'ON e.endNode = n1.id JOIN nodes n2 ON e.startNode = n2.id';
+        }
+        const conds: string[] = [];
+        const paramsArr: any[] = [];
+        if (hop.rel.type) {
+          conds.push('e.type = ?');
+          paramsArr.push(hop.rel.type);
+        }
+        if (hop.rel.properties) {
+          for (const [k, v] of Object.entries(hop.rel.properties)) {
+            const val =
+              v && typeof v === 'object' && 'type' in v
+                ? v.type === 'Literal'
+                  ? (v as any).value
+                  : v.type === 'Parameter'
+                  ? params[(v as any).name]
+                  : undefined
+                : v;
+            if (val === null) {
+              conds.push(`json_extract(e.properties, '$.${k}') IS NULL`);
+            } else {
+              conds.push(`json_extract(e.properties, '$.${k}') = ?`);
+              paramsArr.push(val);
+            }
+          }
+        }
+        if (chain.start.labels) {
+          for (const lbl of chain.start.labels) {
+            conds.push('n1.labels LIKE ?');
+            paramsArr.push(`%"${lbl}"%`);
+          }
+        }
+        if (chain.start.properties) {
+          for (const [k, v] of Object.entries(chain.start.properties)) {
+            const val =
+              v && typeof v === 'object' && 'type' in v
+                ? v.type === 'Literal'
+                  ? (v as any).value
+                  : v.type === 'Parameter'
+                  ? params[(v as any).name]
+                  : undefined
+                : v;
+            if (val === null) {
+              conds.push(`json_extract(n1.properties, '$.${k}') IS NULL`);
+            } else {
+              conds.push(`json_extract(n1.properties, '$.${k}') = ?`);
+              paramsArr.push(val);
+            }
+          }
+        }
+        if (hop.node.labels) {
+          for (const lbl of hop.node.labels) {
+            conds.push('n2.labels LIKE ?');
+            paramsArr.push(`%"${lbl}"%`);
+          }
+        }
+        if (hop.node.properties) {
+          for (const [k, v] of Object.entries(hop.node.properties)) {
+            const val =
+              v && typeof v === 'object' && 'type' in v
+                ? v.type === 'Literal'
+                  ? (v as any).value
+                  : v.type === 'Parameter'
+                  ? params[(v as any).name]
+                  : undefined
+                : v;
+            if (val === null) {
+              conds.push(`json_extract(n2.properties, '$.${k}') IS NULL`);
+            } else {
+              conds.push(`json_extract(n2.properties, '$.${k}') = ?`);
+              paramsArr.push(val);
+            }
+          }
+        }
+        if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
+        const stmt = self.db.prepare(sql);
+        stmt.bind(paramsArr);
+        while (stmt.step()) {
+          const rowObj: any = stmt.getAsObject();
+          const n1 = self.rowToNode({
+            id: rowObj.n1id,
+            labels: rowObj.n1labels,
+            properties: rowObj.n1props,
+          });
+          const n2 = self.rowToNode({
+            id: rowObj.n2id,
+            labels: rowObj.n2labels,
+            properties: rowObj.n2props,
+          });
+          const rel = self.rowToRel({
+            id: rowObj.eid,
+            type: rowObj.etype,
+            startNode: rowObj.estart,
+            endNode: rowObj.eend,
+            properties: rowObj.eprops,
+          });
+          const varsMap = new Map<string, any>();
+          varsMap.set(chain.start.variable, n1);
+          varsMap.set(hop.node.variable, n2);
+          if (hop.rel.variable) varsMap.set(hop.rel.variable, rel);
+          if (chain.where && !evalWhere(chain.where, varsMap)) continue;
+          const outRow: Record<string, any> = {};
+          chain.returnItems.forEach((item: any, idx: number) => {
+            if (item.expression.type === 'All') {
+              for (const [k, v] of varsMap.entries()) outRow[k] = v;
+            } else {
+              const alias =
+                item.alias ||
+                (item.expression.type === 'Variable'
+                  ? item.expression.name
+                  : chain.returnItems.length === 1
+                  ? 'value'
+                  : `value${idx}`);
+              outRow[alias] = self.evalExpr(item.expression, varsMap, params);
+            }
+          });
+          yield outRow;
+        }
+        stmt.free();
+      }
+
+      return genChain();
     }
 
     if (ast.type === 'Unwind') {
