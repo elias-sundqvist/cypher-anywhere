@@ -32,6 +32,52 @@ test('transpile with parameter', () => {
   assert.deepStrictEqual(result.params, ['%"Person"%', 'Bob']);
 });
 
+test('transpile match all nodes', () => {
+  const result = adapter.transpile('MATCH (n) RETURN n');
+  assert.ok(result);
+  assert.strictEqual(result.sql, 'SELECT id, labels, properties FROM nodes');
+  assert.deepStrictEqual(result.params, []);
+});
+
+test('transpile match by property only', () => {
+  const result = adapter.transpile('MATCH (n {name:"Alice"}) RETURN n');
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE json_extract(properties, \'$.name\') = ?'
+  );
+  assert.deepStrictEqual(result.params, ['Alice']);
+});
+
+test('transpile match with alias', () => {
+  const result = adapter.transpile('MATCH (n:Person) RETURN n AS person');
+  assert.ok(result);
+  assert.strictEqual(result.sql, 'SELECT id, labels, properties FROM nodes WHERE labels LIKE ?');
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile WHERE comparison with parameter', () => {
+  const q = 'MATCH (n:Person) WHERE n.age >= $age RETURN n';
+  const result = adapter.transpile(q, { age: 20 });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.age\') >= ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 20]);
+});
+
+test('transpile parameterized IN list', () => {
+  const q = 'MATCH (n:Person) WHERE n.name IN $names RETURN n';
+  const result = adapter.transpile(q, { names: ['Alice', 'Bob'] });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.name\') IN (?, ?)'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice', 'Bob']);
+});
+
 test('transpile with WHERE comparison', () => {
   const q = 'MATCH (n:Person) WHERE n.age > 30 RETURN n';
   const result = adapter.transpile(q);
