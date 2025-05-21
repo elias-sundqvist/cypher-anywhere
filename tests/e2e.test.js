@@ -1111,6 +1111,17 @@ runOnAdapters('RETURN DISTINCT removes duplicates', async engine => {
   assert.deepStrictEqual(out.sort(), ['John Wick', 'The Matrix']);
 });
 
+runOnAdapters('RETURN DISTINCT node property', async (engine, adapter) => {
+  const q = 'MATCH (p:Person) RETURN DISTINCT p.name AS name ORDER BY name';
+  const result = engine.run(q);
+  const out = [];
+  for await (const row of result) out.push(row.name);
+  assert.deepStrictEqual(out, ['Alice', 'Bob', 'Carol']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
+});
+
 runOnAdapters('CALL subquery returns rows', async engine => {
   const q = 'CALL { MATCH (p:Person {name:"Alice"}) RETURN p } RETURN p';
   const out = [];
