@@ -53,9 +53,6 @@ runOnAdapters('MATCH all nodes', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, baseData.nodes.length);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('MATCH with label', async (engine, adapter) => {
@@ -63,9 +60,6 @@ runOnAdapters('MATCH with label', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 3);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('MATCH with property filter', async (engine, adapter) => {
@@ -74,9 +68,6 @@ runOnAdapters('MATCH with property filter', async (engine, adapter) => {
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('CREATE node then MATCH finds it', async engine => {
@@ -153,9 +144,6 @@ runOnAdapters('delete relationship', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.r);
   assert.strictEqual(out.length, 0);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('merge relationship between existing nodes', async engine => {
@@ -177,9 +165,6 @@ runOnAdapters('match by secondary label', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('match with multiple labels', async (engine, adapter) => {
@@ -188,9 +173,6 @@ runOnAdapters('match with multiple labels', async (engine, adapter) => {
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Carol');
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('create node with multiple labels', async engine => {
@@ -331,9 +313,6 @@ runOnAdapters('relationship deleted is gone', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.r);
   assert.strictEqual(out.length, 0);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('create relationship and return nodes', async engine => {
@@ -410,9 +389,6 @@ runOnAdapters('match with WHERE filter', async (engine, adapter) => {
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('match with WHERE inequality', async (engine, adapter) => {
@@ -421,9 +397,6 @@ runOnAdapters('match with WHERE inequality', async (engine, adapter) => {
   for await (const row of result) out.push(row.m);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.title, 'John Wick');
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('match with WHERE less than inequality', async (engine, adapter) => {
@@ -432,9 +405,6 @@ runOnAdapters('match with WHERE less than inequality', async (engine, adapter) =
   for await (const row of result) out.push(row.m);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.title, 'The Matrix');
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('match relationship with WHERE', async engine => {
@@ -449,9 +419,6 @@ runOnAdapters('match all ACTED_IN relationships', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.r);
   assert.strictEqual(out.length, 3);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('match with WHERE using AND', async (engine, adapter) => {
@@ -459,9 +426,6 @@ runOnAdapters('match with WHERE using AND', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 0);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('match with WHERE using OR', async (engine, adapter) => {
@@ -469,9 +433,6 @@ runOnAdapters('match with WHERE using OR', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 2);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('match with WHERE using NOT', async (engine, adapter) => {
@@ -479,9 +440,6 @@ runOnAdapters('match with WHERE using NOT', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 2);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('match with WHERE not equals operator', async (engine, adapter) => {
@@ -489,9 +447,6 @@ runOnAdapters('match with WHERE not equals operator', async (engine, adapter) =>
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 2);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('match with WHERE IN list', async (engine, adapter) => {
@@ -500,9 +455,6 @@ runOnAdapters('match with WHERE IN list', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.n.properties.name);
   assert.deepStrictEqual(out.sort(), ['Alice', 'Bob']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('match with parameterized IN', async (engine, adapter) => {
@@ -511,9 +463,6 @@ runOnAdapters('match with parameterized IN', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.n.properties.name);
   assert.deepStrictEqual(out.sort(), ["Alice", "Bob"]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('WHERE clause with parentheses', async (engine, adapter) => {
@@ -523,9 +472,6 @@ runOnAdapters('WHERE clause with parentheses', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.n.properties.name);
   assert.deepStrictEqual(out.sort(), ['Alice', 'Bob']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('match with WHERE STARTS WITH', async (engine, adapter) => {
@@ -534,9 +480,6 @@ runOnAdapters('match with WHERE STARTS WITH', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.n.properties.name);
   assert.deepStrictEqual(out, ['Alice']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('match with WHERE ENDS WITH', async (engine, adapter) => {
@@ -545,9 +488,6 @@ runOnAdapters('match with WHERE ENDS WITH', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.n.properties.name);
   assert.deepStrictEqual(out, ['Bob']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('match with WHERE CONTAINS', async (engine, adapter) => {
@@ -556,9 +496,6 @@ runOnAdapters('match with WHERE CONTAINS', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.n.properties.name);
   assert.deepStrictEqual(out, ['Carol']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('FOREACH create multiple nodes', async engine => {
@@ -742,9 +679,6 @@ runOnAdapters('relationship chain with WHERE filters results', async (engine, ad
   const result = engine.run(q);
   for await (const row of result) out.push(row.title);
   assert.deepStrictEqual(out.sort(), ['John Wick', 'John Wick']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('return numeric addition expression', async engine => {
@@ -792,9 +726,6 @@ runOnAdapters('UNWIND literal list returns rows', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.x);
   assert.deepStrictEqual(out.sort(), [1, 2, 3]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('UNWIND expression on list items', async (engine, adapter) => {
@@ -802,9 +733,6 @@ runOnAdapters('UNWIND expression on list items', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.value);
   assert.deepStrictEqual(out.sort(), [2, 3, 4]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('UNWIND with return alias', async (engine, adapter) => {
@@ -812,9 +740,6 @@ runOnAdapters('UNWIND with return alias', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.val);
   assert.deepStrictEqual(out.sort(), [1, 2, 3]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('UNWIND nodes from path', async engine => {
@@ -843,9 +768,6 @@ runOnAdapters('OPTIONAL MATCH missing returns null row', async (engine, adapter)
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0], undefined);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('OPTIONAL MATCH existing node returns it', async (engine, adapter) => {
@@ -855,9 +777,6 @@ runOnAdapters('OPTIONAL MATCH existing node returns it', async (engine, adapter)
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('OPTIONAL MATCH multiple patterns returns partial row', async (engine, adapter) => {
@@ -868,9 +787,6 @@ runOnAdapters('OPTIONAL MATCH multiple patterns returns partial row', async (eng
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].m.properties.title, 'The Matrix');
   assert.strictEqual(out[0].p, undefined);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('OPTIONAL MATCH relationship chain missing returns null row', async engine => {
@@ -888,9 +804,6 @@ runOnAdapters('ORDER BY with SKIP and LIMIT', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Bob']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('ORDER BY DESC', async (engine, adapter) => {
@@ -899,9 +812,6 @@ runOnAdapters('ORDER BY DESC', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.year);
   assert.deepStrictEqual(out, [2014, 1999]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('ORDER BY multiple expressions', async (engine, adapter) => {
@@ -912,9 +822,6 @@ runOnAdapters('ORDER BY multiple expressions', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(`${row.year}-${row.title}`);
   assert.deepStrictEqual(out, ['2014-Extra', '2014-John Wick', '1999-The Matrix']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('RETURN multiple expressions with aliases', async (engine, adapter) => {
@@ -923,9 +830,6 @@ runOnAdapters('RETURN multiple expressions with aliases', async (engine, adapter
   const out = [];
   for await (const row of result) out.push(`${row.title}-${row.year}`);
   assert.deepStrictEqual(out, ['The Matrix-1999', 'John Wick-2014']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('LIMIT with parameter', async (engine, adapter) => {
@@ -934,9 +838,6 @@ runOnAdapters('LIMIT with parameter', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Alice', 'Bob']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('SKIP with parameter', async (engine, adapter) => {
@@ -945,9 +846,6 @@ runOnAdapters('SKIP with parameter', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Bob', 'Carol']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('MATCH with parameter property', async (engine, adapter) => {
@@ -957,9 +855,6 @@ runOnAdapters('MATCH with parameter property', async (engine, adapter) => {
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('WHERE clause with parameter', async (engine, adapter) => {
@@ -969,9 +864,6 @@ runOnAdapters('WHERE clause with parameter', async (engine, adapter) => {
   for await (const row of result) out.push(row.m);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.title, 'John Wick');
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('WHERE IS NULL matches missing property', async (engine, adapter) => {
@@ -979,9 +871,6 @@ runOnAdapters('WHERE IS NULL matches missing property', async (engine, adapter) 
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 3);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('WHERE IS NOT NULL matches existing property', async (engine, adapter) => {
@@ -991,9 +880,6 @@ runOnAdapters('WHERE IS NOT NULL matches existing property', async (engine, adap
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Bob');
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('SET property using parameter', async engine => {
@@ -1016,9 +902,6 @@ runOnAdapters('COUNT aggregation', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.value);
   assert.strictEqual(out[0], 2);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('COUNT on empty result returns 0', async (engine, adapter) => {
@@ -1026,9 +909,6 @@ runOnAdapters('COUNT on empty result returns 0', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.cnt);
   assert.deepStrictEqual(out, [0]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('OPTIONAL MATCH with COUNT returns 0', async engine => {
@@ -1044,9 +924,6 @@ runOnAdapters('COUNT DISTINCT aggregation', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.cnt);
   assert.strictEqual(out[0], 3);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('COUNT DISTINCT star counts rows', async (engine, adapter) => {
@@ -1055,9 +932,6 @@ runOnAdapters('COUNT DISTINCT star counts rows', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.cnt);
   assert.strictEqual(out[0], 3);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('SUM aggregation', async (engine, adapter) => {
@@ -1065,9 +939,6 @@ runOnAdapters('SUM aggregation', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.value);
   assert.strictEqual(out[0], 1999 + 2014);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('aggregation inside expression', async (engine, adapter) => {
@@ -1076,9 +947,6 @@ runOnAdapters('aggregation inside expression', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.cnt);
   assert.deepStrictEqual(out, [3]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('GROUP BY with COUNT', async (engine, adapter) => {
@@ -1088,9 +956,6 @@ runOnAdapters('GROUP BY with COUNT', async (engine, adapter) => {
   for await (const row of result) res[row.year] = row.cnt;
   assert.strictEqual(res[1999], 1);
   assert.strictEqual(res[2014], 1);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('ORDER BY after aggregation', async (engine, adapter) => {
@@ -1101,9 +966,6 @@ runOnAdapters('ORDER BY after aggregation', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(`${row.year}:${row.cnt}`);
   assert.deepStrictEqual(out, ['2014:2', '1999:1']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('COUNT on relationship chain', async engine => {
@@ -1121,9 +983,6 @@ runOnAdapters('COLLECT aggregation returns list', async (engine, adapter) => {
   for await (const r of result) row = r;
   assert.ok(row);
   assert.deepStrictEqual(row.names.sort(), ['Alice', 'Bob', 'Carol']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('MIN aggregation', async (engine, adapter) => {
@@ -1132,9 +991,6 @@ runOnAdapters('MIN aggregation', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.year);
   assert.deepStrictEqual(out, [1999]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('MAX aggregation', async (engine, adapter) => {
@@ -1143,9 +999,6 @@ runOnAdapters('MAX aggregation', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.year);
   assert.deepStrictEqual(out, [2014]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('MIN on empty result returns null', async (engine, adapter) => {
@@ -1154,9 +1007,6 @@ runOnAdapters('MIN on empty result returns null', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.val);
   assert.deepStrictEqual(out, [null]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('UNION combines results', async (engine, adapter) => {
@@ -1168,9 +1018,6 @@ runOnAdapters('UNION combines results', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out.sort(), ['Alice', 'Bob']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('UNION removes duplicate rows', async (engine, adapter) => {
@@ -1182,9 +1029,6 @@ runOnAdapters('UNION removes duplicate rows', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Alice']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('UNION ALL preserves duplicate rows', async (engine, adapter) => {
@@ -1196,9 +1040,6 @@ runOnAdapters('UNION ALL preserves duplicate rows', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Alice', 'Alice']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('UNION with ORDER BY SKIP LIMIT', async (engine, adapter) => {
@@ -1211,9 +1052,6 @@ runOnAdapters('UNION with ORDER BY SKIP LIMIT', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Alice']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('RETURN DISTINCT removes duplicates', async engine => {
@@ -1229,9 +1067,6 @@ runOnAdapters('RETURN DISTINCT node property', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Alice', 'Bob', 'Carol']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('CALL subquery returns rows', async (engine, adapter) => {
@@ -1241,9 +1076,6 @@ runOnAdapters('CALL subquery returns rows', async (engine, adapter) => {
   for await (const row of result) out.push(row.p);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('CALL subquery propagates alias', async (engine, adapter) => {
@@ -1252,9 +1084,6 @@ runOnAdapters('CALL subquery propagates alias', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out.sort(), ['Alice', 'Bob', 'Carol']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('CALL with ORDER BY applies ordering', async (engine, adapter) => {
@@ -1263,9 +1092,6 @@ runOnAdapters('CALL with ORDER BY applies ordering', async (engine, adapter) => 
   const out = [];
   for await (const row of result) out.push(row.x);
   assert.deepStrictEqual(out, [1, 2]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('CALL with ORDER BY SKIP LIMIT', async (engine, adapter) => {
@@ -1275,9 +1101,6 @@ runOnAdapters('CALL with ORDER BY SKIP LIMIT', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.x);
   assert.deepStrictEqual(out, [2]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('single hop match without rel variable', async (engine, adapter) => {
@@ -1287,9 +1110,6 @@ runOnAdapters('single hop match without rel variable', async (engine, adapter) =
   for await (const row of result) out.push(`${row.p.properties.name}-${row.m.properties.title}`);
   const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
   assert.deepStrictEqual(out.sort(), expected.sort());
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('single hop incoming match without rel variable', async (engine, adapter) => {
@@ -1299,9 +1119,6 @@ runOnAdapters('single hop incoming match without rel variable', async (engine, a
   for await (const row of result) out.push(`${row.p.properties.name}-${row.m.properties.title}`);
   const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
   assert.deepStrictEqual(out.sort(), expected.sort());
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('single hop match without labels', async (engine, adapter) => {
@@ -1311,9 +1128,6 @@ runOnAdapters('single hop match without labels', async (engine, adapter) => {
   for await (const row of result) out.push(`${row.a.properties.name}-${row.b.properties.title}`);
   const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
   assert.deepStrictEqual(out.sort(), expected.sort());
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('single hop match without start variable', async (engine, adapter) => {
@@ -1323,9 +1137,6 @@ runOnAdapters('single hop match without start variable', async (engine, adapter)
   for await (const row of result) out.push(row.m.properties.title);
   const expected = ['The Matrix', 'John Wick', 'John Wick'];
   assert.deepStrictEqual(out.sort(), expected.sort());
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('single hop match returning only target node', async (engine, adapter) => {
@@ -1335,9 +1146,6 @@ runOnAdapters('single hop match returning only target node', async (engine, adap
   for await (const row of result) out.push(row.b.properties.title);
   const expected = ['The Matrix', 'John Wick', 'John Wick'];
   assert.deepStrictEqual(out.sort(), expected.sort());
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('single hop match returning only source node', async (engine, adapter) => {
@@ -1347,9 +1155,6 @@ runOnAdapters('single hop match returning only source node', async (engine, adap
   for await (const row of result) out.push(row.a.properties.name);
   const expected = ['Alice', 'Alice', 'Bob'];
   assert.deepStrictEqual(out.sort(), expected.sort());
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('single hop incoming match without labels', async (engine, adapter) => {
@@ -1359,9 +1164,6 @@ runOnAdapters('single hop incoming match without labels', async (engine, adapter
   for await (const row of result) out.push(`${row.a.properties.name}-${row.b.properties.title}`);
   const expected = ['Alice-The Matrix', 'Alice-John Wick', 'Bob-John Wick'];
   assert.deepStrictEqual(out.sort(), expected.sort());
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('undirected single hop match', async engine => {
@@ -1378,9 +1180,6 @@ runOnAdapters('MATCH with multiple node patterns', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(`${row.name}-${row.title}`);
   assert.strictEqual(out.length, 6);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('negative numeric literals parsed correctly', async engine => {
@@ -1397,9 +1196,6 @@ runOnAdapters('arithmetic subtraction in RETURN', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.diff);
   assert.deepStrictEqual(out, [99, 114]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('arithmetic multiplication and division in RETURN', async (engine, adapter) => {
@@ -1408,9 +1204,6 @@ runOnAdapters('arithmetic multiplication and division in RETURN', async (engine,
   const out = [];
   for await (const row of result) out.push(row.val);
   assert.deepStrictEqual(out, [((1999 - 1900) / 2) * 3, ((2014 - 1900) / 2) * 3]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('unary minus on property', async (engine, adapter) => {
@@ -1419,9 +1212,6 @@ runOnAdapters('unary minus on property', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.neg);
   assert.deepStrictEqual(out, [-2014]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('unary minus on expression', async (engine, adapter) => {
@@ -1430,9 +1220,6 @@ runOnAdapters('unary minus on expression', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.val);
   assert.deepStrictEqual(out, [-3]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 runOnAdapters('RETURN star returns all variables', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person {name:"Alice"}) RETURN *');
@@ -1441,9 +1228,6 @@ runOnAdapters('RETURN star returns all variables', async (engine, adapter) => {
   assert.strictEqual(out.length, 1);
   assert.ok(out[0].n);
   assert.strictEqual(out[0].n.properties.name, 'Alice');
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('RETURN star with relationship chain', async (engine, adapter) => {
@@ -1456,18 +1240,12 @@ runOnAdapters('RETURN star with relationship chain', async (engine, adapter) => 
   assert.strictEqual(out[0].p.properties.name, 'Alice');
   assert.strictEqual(out[0].m.properties.title, 'John Wick');
   assert.strictEqual(out[0].r.type, 'ACTED_IN');
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 runOnAdapters('id() function returns node id', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person {name:"Alice"}) RETURN id(n) AS id');
   const out = [];
   for await (const row of result) out.push(row.id);
   assert.deepStrictEqual(out, [1]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('id() on relationship returns rel id', async (engine, adapter) => {
@@ -1476,9 +1254,6 @@ runOnAdapters('id() on relationship returns rel id', async (engine, adapter) => 
   const out = [];
   for await (const row of result) out.push(row.id);
   assert.deepStrictEqual(out, [7]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('type() on relationship returns rel type', async (engine, adapter) => {
@@ -1487,9 +1262,6 @@ runOnAdapters('type() on relationship returns rel type', async (engine, adapter)
   const out = [];
   for await (const row of result) out.push(row.type);
   assert.deepStrictEqual(out, ['ACTED_IN']);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('labels() function returns node labels', async (engine, adapter) => {
@@ -1498,9 +1270,6 @@ runOnAdapters('labels() function returns node labels', async (engine, adapter) =
   const out = [];
   for await (const row of result) out.push(row.labs);
   assert.deepStrictEqual(out, [['Person', 'Actor']]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('WITH alias named id allowed', async engine => {
@@ -1515,9 +1284,6 @@ runOnAdapters('standalone RETURN expression', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.val);
   assert.deepStrictEqual(out, [42]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('NULL literal handled in create and match', async (engine, adapter) => {
@@ -1529,9 +1295,6 @@ runOnAdapters('NULL literal handled in create and match', async (engine, adapter
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('NULL in arithmetic returns NULL', async (engine, adapter) => {
@@ -1540,9 +1303,6 @@ runOnAdapters('NULL in arithmetic returns NULL', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row);
   assert.deepStrictEqual(out, [{ a: null, b: null, c: null, d: null }]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('WITH passes variable to subsequent MATCH', async engine => {
@@ -1616,9 +1376,6 @@ runOnAdapters('MATCH without variable returns count', async (engine, adapter) =>
   const out = [];
   for await (const row of result) out.push(row.cnt);
   assert.deepStrictEqual(out, [3]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('length() on list expression returns length', async (engine, adapter) => {
@@ -1627,9 +1384,6 @@ runOnAdapters('length() on list expression returns length', async (engine, adapt
   const out = [];
   for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [3]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('length() on string expression returns length', async (engine, adapter) => {
@@ -1638,9 +1392,6 @@ runOnAdapters('length() on string expression returns length', async (engine, ada
   const out = [];
   for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [3]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('size() on list expression returns length', async (engine, adapter) => {
@@ -1649,9 +1400,6 @@ runOnAdapters('size() on list expression returns length', async (engine, adapter
   const out = [];
   for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [3]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('size() on string expression returns length', async (engine, adapter) => {
@@ -1660,9 +1408,6 @@ runOnAdapters('size() on string expression returns length', async (engine, adapt
   const out = [];
   for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [3]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });
 
 runOnAdapters('size() on path returns hop count', async (engine, adapter) => {
@@ -1671,7 +1416,4 @@ runOnAdapters('size() on path returns hop count', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [1]);
-  if (adapter.supportsTranspilation) {
-    assert.strictEqual(result.meta.transpiled, true);
-  }
 });

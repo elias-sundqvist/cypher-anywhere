@@ -578,6 +578,7 @@ export class SqlJsAdapter implements StorageAdapter {
       matchAst.skip ||
       matchAst.limit ||
       matchAst.distinct ||
+      matchAst.optional ||
       matchAst.returnItems.length !== 1 ||
       matchAst.returnItems[0].expression.type !== 'Variable' ||
       matchAst.returnItems[0].expression.name !== matchAst.variable
@@ -1853,139 +1854,23 @@ export class SqlJsAdapter implements StorageAdapter {
     const asts = parseMany(cypher);
     if (asts.length !== 1) return null;
     const ast = asts[0];
-    if (ast.type === 'Union') {
-      const leftIter = this.runTranspiledAST((ast as UnionQuery).left, params);
-      const rightIter = this.runTranspiledAST((ast as UnionQuery).right, params);
-      if (!leftIter || !rightIter) return null;
-      const self = this;
-      async function* gen() {
-        const rows: Record<string, any>[] = [];
-        const seen = new Set<string>();
-        for await (const r of leftIter!) {
-          if ((ast as UnionQuery).all) {
-            rows.push(r);
-          } else {
-            const k = JSON.stringify(r);
-            if (!seen.has(k)) {
-              seen.add(k);
-              rows.push(r);
-            }
-          }
-        }
-        for await (const r of rightIter!) {
-          if ((ast as UnionQuery).all) {
-            rows.push(r);
-          } else {
-            const k = JSON.stringify(r);
-            if (!seen.has(k)) {
-              seen.add(k);
-              rows.push(r);
-            }
-          }
-        }
-        if ((ast as UnionQuery).orderBy) {
-          rows.sort((a, b) => {
-            for (let i = 0; i < (ast as UnionQuery).orderBy!.length; i++) {
-              const ao = (ast as UnionQuery).orderBy![i];
-              const av = self.evalExpr(ao.expression, new Map(Object.entries(a)), params);
-              const bv = self.evalExpr(ao.expression, new Map(Object.entries(b)), params);
-              if (av === bv) continue;
-              if (av === undefined) return 1;
-              if (bv === undefined) return -1;
-              let cmp = av > bv ? 1 : -1;
-              if (ao.direction === 'DESC') cmp = -cmp;
-              return cmp;
-            }
-            return 0;
-          });
-        }
-        let start = 0;
-        if ((ast as UnionQuery).skip)
-          start = Number(self.evalExpr((ast as UnionQuery).skip!, new Map(), params));
-        let end = rows.length;
-        if ((ast as UnionQuery).limit !== undefined) {
-          end = Math.min(
-            end,
-            start + Number(self.evalExpr((ast as UnionQuery).limit!, new Map(), params))
-          );
-        }
-        for (let i = start; i < end; i++) {
-          yield rows[i];
-        }
+    const t = this.transpileAST(ast, params);
+    if (!t) return null;
+    const transpiled = t;
+    if (ast.type !== 'MatchReturn') return null;
+    const matchAst = ast as MatchReturnQuery;
+    const alias = matchAst.returnItems[0].alias || matchAst.variable;
+    const self = this;
+    async function* gen() {
+      await self.ensureReady();
+      const stmt = self.db.prepare(transpiled.sql);
+      stmt.bind(transpiled.params);
+      while (stmt.step()) {
+        const node = self.rowToNode(stmt.getAsObject());
+        yield { [alias]: node } as Record<string, unknown>;
       }
-      return gen();
+      stmt.free();
     }
-    if (ast.type === 'Call') {
-      const call = ast as CallQuery;
-      const subsIters = call.subquery.map(q => this.runTranspiledAST(q, params));
-      if (subsIters.some(s => !s)) return null;
-      const self = this;
-      async function* genCall() {
-        const local = new Map<string, any>();
-        const outRows: Record<string, any>[] = [];
-        for (let i = 0; i < subsIters.length; i++) {
-          const it = subsIters[i]!;
-          for await (const row of it) {
-            if (i === subsIters.length - 1) {
-              const varsWithRow = new Map(local);
-              for (const [k, v] of Object.entries(row)) varsWithRow.set(k, v);
-              const out: Record<string, any> = {};
-              call.returnItems.forEach((item, idx) => {
-                const alias =
-                  item.alias ||
-                  (item.expression.type === 'Variable'
-                    ? item.expression.name
-                    : call.returnItems.length === 1
-                    ? 'value'
-                    : `value${idx}`);
-                out[alias] = self.evalExpr(item.expression, varsWithRow, params);
-              });
-              outRows.push(out);
-            } else {
-              for (const [k, v] of Object.entries(row)) local.set(k, v);
-            }
-          }
-        }
-        let rowsToYield = outRows;
-        if (call.distinct) {
-          const seen = new Set<string>();
-          rowsToYield = [];
-          for (const r of outRows) {
-            const key = JSON.stringify(r);
-            if (!seen.has(key)) {
-              seen.add(key);
-              rowsToYield.push(r);
-            }
-          }
-        }
-        if (call.orderBy) {
-          rowsToYield.sort((a, b) => {
-            for (let i = 0; i < call.orderBy!.length; i++) {
-              const ob = call.orderBy![i];
-              const av = self.evalExpr(ob.expression, new Map(Object.entries(a)), params);
-              const bv = self.evalExpr(ob.expression, new Map(Object.entries(b)), params);
-              if (av === bv) continue;
-              if (av === undefined) return 1;
-              if (bv === undefined) return -1;
-              let cmp = av > bv ? 1 : -1;
-              if (ob.direction === 'DESC') cmp = -cmp;
-              return cmp;
-            }
-            return 0;
-          });
-        }
-        let start = 0;
-        if (call.skip) start = Number(self.evalExpr(call.skip, new Map(), params));
-        let end = rowsToYield.length;
-        if (call.limit !== undefined) {
-          end = Math.min(end, start + Number(self.evalExpr(call.limit, new Map(), params)));
-        }
-        for (let i = start; i < end; i++) {
-          yield rowsToYield[i];
-        }
-      }
-      return genCall();
-    }
-    return this.runTranspiledAST(ast, params);
+    return gen();
   }
 }
