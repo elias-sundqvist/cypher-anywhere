@@ -385,3 +385,47 @@ test('transpile returns null for relationship match', () => {
   const result = adapter.transpile(q);
   assert.strictEqual(result, null);
 });
+
+test('transpile WHERE id equality', () => {
+  const q = 'MATCH (n:Person) WHERE id(n) = 1 RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND id = ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 1]);
+});
+
+test('transpile WHERE id IN list', () => {
+  const q = 'MATCH (n) WHERE id(n) IN [1,2] RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE id IN (?, ?)'
+  );
+  assert.deepStrictEqual(result.params, [1, 2]);
+});
+
+test('transpile WHERE id IN empty list', () => {
+  const q = 'MATCH (n:Person) WHERE id(n) IN [] RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND 0'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile WHERE id equality parameter', () => {
+  const q = 'MATCH (n) WHERE id(n) = $id RETURN n';
+  const result = adapter.transpile(q, { id: 3 });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE id = ?'
+  );
+  assert.deepStrictEqual(result.params, [3]);
+});

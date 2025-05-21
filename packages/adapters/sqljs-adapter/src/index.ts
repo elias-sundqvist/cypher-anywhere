@@ -635,9 +635,17 @@ export class SqlJsAdapter implements StorageAdapter {
     function convertWhere(where: any): [string, any[]] | null {
       if (!where) return ['1', []];
       if (where.type === 'Condition') {
-        if (where.left.type !== 'Property' || where.left.variable !== matchAst.variable)
+        let col: string | null = null;
+        const left = where.left;
+        let isId = false;
+        if (left.type === 'Property' && left.variable === matchAst.variable) {
+          col = `json_extract(properties, '$.${left.property}')`;
+        } else if (left.type === 'Id' && left.variable === matchAst.variable) {
+          col = 'id';
+          isId = true;
+        } else {
           return null;
-        const col = `json_extract(properties, '$.${where.left.property}')`;
+        }
         switch (where.operator) {
           case '=':
           case '<>': {
@@ -667,20 +675,25 @@ export class SqlJsAdapter implements StorageAdapter {
             return [`${col} IN (${placeholders})`, val];
           }
           case 'IS NULL':
+            if (isId) return null;
             return [`${col} IS NULL`, []];
           case 'IS NOT NULL':
+            if (isId) return null;
             return [`${col} IS NOT NULL`, []];
           case 'STARTS WITH': {
+            if (isId) return null;
             const val = toValue(where.right);
             if (typeof val !== 'string') return null;
             return [`${col} LIKE ?`, [val + '%']];
           }
           case 'ENDS WITH': {
+            if (isId) return null;
             const val = toValue(where.right);
             if (typeof val !== 'string') return null;
             return [`${col} LIKE ?`, ['%' + val]];
           }
           case 'CONTAINS': {
+            if (isId) return null;
             const val = toValue(where.right);
             if (typeof val !== 'string') return null;
             return [`${col} LIKE ?`, ['%' + val + '%']];
