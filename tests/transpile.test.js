@@ -347,6 +347,72 @@ test('transpile with negative comparison', () => {
   assert.deepStrictEqual(result.params, ['%"Person"%', -5]);
 });
 
+test('transpile parameterized IN empty list', () => {
+  const q = 'MATCH (n:Person) WHERE n.name IN $names RETURN n';
+  const result = adapter.transpile(q, { names: [] });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND 0'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile match with boolean property', () => {
+  const q = 'MATCH (n:Person {flag:true}) RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.flag\') = ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', true]);
+});
+
+test('transpile match with parameterized boolean property', () => {
+  const q = 'MATCH (n:Person {flag:$val}) RETURN n';
+  const result = adapter.transpile(q, { val: false });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.flag\') = ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', false]);
+});
+
+test('transpile match with parameterized null property', () => {
+  const q = 'MATCH (n:Person {nickname:$nn}) RETURN n';
+  const result = adapter.transpile(q, { nn: null });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.nickname\') IS NULL'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile parameterized WHERE <> comparison', () => {
+  const q = 'MATCH (n:Person) WHERE n.name <> $name RETURN n';
+  const result = adapter.transpile(q, { name: 'Alice' });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.name\') <> ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice']);
+});
+
+test('transpile parameterized WHERE <= comparison', () => {
+  const q = 'MATCH (n:Person) WHERE n.age <= $age RETURN n';
+  const result = adapter.transpile(q, { age: 40 });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.age\') <= ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 40]);
+});
+
 test('transpile returns null for ORDER BY', () => {
   const q = 'MATCH (n:Person) RETURN n ORDER BY n.name';
   const result = adapter.transpile(q);

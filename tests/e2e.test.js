@@ -900,6 +900,7 @@ runOnAdapters('SKIP with parameter', async (engine, adapter) => {
 runOnAdapters('MATCH with parameter property', async (engine, adapter) => {
   const q = 'MATCH (n:Person {name:$name}) RETURN n';
   const result = engine.run(q, { name: 'Alice' });
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
