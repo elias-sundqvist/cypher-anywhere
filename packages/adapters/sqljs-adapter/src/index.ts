@@ -549,6 +549,160 @@ export class SqlJsAdapter implements StorageAdapter {
 
   supportsTranspilation = true;
 
+  transpile(
+    cypher: string,
+    params: Record<string, any> = {}
+  ): { sql: string; params: any[] } | null {
+    const asts = parseMany(cypher);
+    if (asts.length !== 1) return null;
+    return this.transpileAST(asts[0], params);
+  }
+
+  private transpileAST(
+    ast: CypherAST,
+    params: Record<string, any>
+  ): { sql: string; params: any[] } | null {
+    if (ast.type === 'MatchReturn') {
+      return this.transpileMatchReturn(ast as MatchReturnQuery, params);
+    }
+    return null;
+  }
+
+  private transpileMatchReturn(
+    matchAst: MatchReturnQuery,
+    params: Record<string, any>
+  ): { sql: string; params: any[] } | null {
+    if (
+      matchAst.isRelationship ||
+      matchAst.orderBy ||
+      matchAst.skip ||
+      matchAst.limit ||
+      matchAst.distinct ||
+      matchAst.returnItems.length !== 1 ||
+      matchAst.returnItems[0].expression.type !== 'Variable' ||
+      matchAst.returnItems[0].expression.name !== matchAst.variable
+    )
+      return null;
+
+    let sql = 'SELECT id, labels, properties FROM nodes';
+    const paramsArr: any[] = [];
+    const conds: string[] = [];
+    if (matchAst.labels && matchAst.labels.length > 0) {
+      for (const lbl of matchAst.labels) {
+        conds.push('labels LIKE ?');
+        paramsArr.push(`%"${lbl}"%`);
+      }
+    }
+    if (matchAst.properties) {
+      for (const [k, v] of Object.entries(matchAst.properties)) {
+        const val =
+          v && typeof v === 'object' && 'type' in v
+            ? v.type === 'Literal'
+              ? (v as any).value
+              : v.type === 'Parameter'
+              ? params[(v as any).name]
+              : undefined
+            : v;
+        if (val === null) {
+          conds.push(`json_extract(properties, '$.${k}') IS NULL`);
+        } else {
+          conds.push(`json_extract(properties, '$.${k}') = ?`);
+          paramsArr.push(val);
+        }
+      }
+    }
+
+    function toValue(expr: any): any {
+      if (!expr) return undefined;
+      if (typeof expr === 'object' && 'type' in expr) {
+        if (expr.type === 'Literal') return expr.value;
+        if (expr.type === 'Parameter') return params[expr.name];
+      }
+      return expr;
+    }
+
+    function convertWhere(where: any): [string, any[]] | null {
+      if (!where) return ['1', []];
+      if (where.type === 'Condition') {
+        if (where.left.type !== 'Property' || where.left.variable !== matchAst.variable)
+          return null;
+        const col = `json_extract(properties, '$.${where.left.property}')`;
+        switch (where.operator) {
+          case '=':
+          case '<>': {
+            const val = toValue(where.right);
+            if (val === undefined) return null;
+            if (val === null) {
+              return [
+                `${col} ${where.operator === '=' ? 'IS' : 'IS NOT'} NULL`,
+                [],
+              ];
+            }
+            return [`${col} ${where.operator} ?`, [val]];
+          }
+          case '>':
+          case '>=':
+          case '<':
+          case '<=': {
+            const val = toValue(where.right);
+            if (val === undefined) return null;
+            return [`${col} ${where.operator} ?`, [val]];
+          }
+          case 'IN': {
+            const val = toValue(where.right);
+            if (!Array.isArray(val)) return null;
+            if (val.length === 0) return ['0', []];
+            const placeholders = val.map(() => '?').join(', ');
+            return [`${col} IN (${placeholders})`, val];
+          }
+          case 'IS NULL':
+            return [`${col} IS NULL`, []];
+          case 'IS NOT NULL':
+            return [`${col} IS NOT NULL`, []];
+          case 'STARTS WITH': {
+            const val = toValue(where.right);
+            if (typeof val !== 'string') return null;
+            return [`${col} LIKE ?`, [val + '%']];
+          }
+          case 'ENDS WITH': {
+            const val = toValue(where.right);
+            if (typeof val !== 'string') return null;
+            return [`${col} LIKE ?`, ['%' + val]];
+          }
+          case 'CONTAINS': {
+            const val = toValue(where.right);
+            if (typeof val !== 'string') return null;
+            return [`${col} LIKE ?`, ['%' + val + '%']];
+          }
+          default:
+            return null;
+        }
+      }
+      if (where.type === 'And' || where.type === 'Or') {
+        const l = convertWhere(where.left);
+        const r = convertWhere(where.right);
+        if (!l || !r) return null;
+        const op = where.type === 'And' ? 'AND' : 'OR';
+        return [`(${l[0]} ${op} ${r[0]})`, [...l[1], ...r[1]]];
+      }
+      if (where.type === 'Not') {
+        const inner = convertWhere(where.clause);
+        if (!inner) return null;
+        return [`NOT (${inner[0]})`, inner[1]];
+      }
+      return null;
+    }
+
+    const whereSql = convertWhere(matchAst.where);
+    if (!whereSql) return null;
+    if (whereSql[0] !== '1') {
+      conds.push(whereSql[0]);
+      paramsArr.push(...whereSql[1]);
+    }
+    if (conds.length > 0) sql += ' WHERE ' + conds.join(' AND ');
+    return { sql, params: paramsArr };
+  }
+
   private runTranspiledAST(
     ast: CypherAST,
     params: Record<string, any>
