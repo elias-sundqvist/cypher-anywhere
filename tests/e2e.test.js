@@ -474,6 +474,15 @@ runOnAdapters('match with WHERE not equals operator', async (engine, adapter) =>
   assert.strictEqual(out.length, 2);
 });
 
+runOnAdapters('match with parameterized not equals', async (engine, adapter) => {
+  const q = 'MATCH (n:Person) WHERE n.name <> $name RETURN n';
+  const result = engine.run(q, { name: 'Alice' });
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  const out = [];
+  for await (const row of result) out.push(row.n);
+  assert.strictEqual(out.length, 2);
+});
+
 runOnAdapters('match with WHERE IN list', async (engine, adapter) => {
   const q = 'MATCH (n:Person) WHERE n.name IN ["Alice", "Bob"] RETURN n';
   const result = engine.run(q);
