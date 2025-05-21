@@ -7,6 +7,7 @@ import {
   IndexMetadata,
   parseMany,
   MatchReturnQuery,
+  ReturnQuery,
   Expression
 } from '@cypher-anywhere/core';
 import type * as fsType from 'fs';
@@ -320,6 +321,13 @@ export class SqlJsAdapter implements StorageAdapter {
         const rec = vars.get(expr.variable) as NodeRecord | RelRecord | undefined;
         return rec ? rec.id : undefined;
       }
+      case 'Length': {
+        const val = this.evalExpr(expr.expression, vars, params);
+        if (val && typeof val === 'object' && 'relationships' in val)
+          return (val as any).relationships.length;
+        if (Array.isArray(val) || typeof val === 'string') return (val as any).length;
+        return undefined;
+      }
       case 'All':
         return Object.fromEntries(vars.entries());
       default:
@@ -536,6 +544,48 @@ export class SqlJsAdapter implements StorageAdapter {
     const asts = parseMany(cypher);
     if (asts.length !== 1) return null;
     const ast = asts[0];
+    if (ast.type === 'Return') {
+      const retAst = ast as ReturnQuery;
+      function checkRetExpr(expr: Expression): boolean {
+        switch (expr.type) {
+          case 'Literal':
+          case 'Parameter':
+            return true;
+          case 'Add':
+          case 'Sub':
+          case 'Mul':
+          case 'Div':
+            return checkRetExpr(expr.left) && checkRetExpr(expr.right);
+          case 'Neg':
+          case 'Length':
+            return checkRetExpr(expr.expression);
+          default:
+            return false;
+        }
+      }
+      for (const ri of retAst.returnItems) {
+        if (!checkRetExpr(ri.expression)) return null;
+      }
+      const self = this;
+      async function* gen() {
+        const vars = new Map<string, any>();
+        const row: Record<string, any> = {};
+        retAst.returnItems.forEach((item, idx) => {
+          const alias =
+            item.alias ||
+            (item.expression.type === 'Variable'
+              ? item.expression.name
+              : retAst.returnItems.length === 1
+              ? 'value'
+              : `value${idx}`);
+          const val = self.evalExpr(item.expression as any, vars, params);
+          row[alias] = val;
+          if (item.alias) vars.set(item.alias, val);
+        });
+        yield row;
+      }
+      return gen();
+    }
     if (ast.type !== 'MatchReturn') return null;
     const matchAst = ast as MatchReturnQuery;
     if (
@@ -570,6 +620,8 @@ export class SqlJsAdapter implements StorageAdapter {
         case 'Avg':
         case 'Collect':
           return expr.expression ? checkExpr(expr.expression) : true;
+        case 'Length':
+          return checkExpr(expr.expression);
         case 'All':
           return matchAst.returnItems.length === 1;
         default:
