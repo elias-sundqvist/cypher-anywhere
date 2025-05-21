@@ -604,3 +604,25 @@ test('transpile SUM aggregation', () => {
   );
   assert.deepStrictEqual(result.params, ['%"Movie"%']);
 });
+
+test('transpile standalone RETURN expression', () => {
+  const result = adapter.transpile('RETURN 5 AS val');
+  assert.ok(result);
+  assert.strictEqual(result.sql, 'SELECT ? AS val');
+  assert.deepStrictEqual(result.params, [5]);
+});
+
+test('transpile arithmetic with NULLs', () => {
+  const q = 'RETURN null + 1 AS a, 1 + null AS b, null * 2 AS c, -null AS d';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(result.sql, 'SELECT ? AS a, ? AS b, ? AS c, ? AS d');
+  assert.deepStrictEqual(result.params, [null, null, null, null]);
+});
+
+test('transpile length and size functions', () => {
+  const result = adapter.transpile("RETURN length('abc') AS l1, size([1,2,3]) AS l2");
+  assert.ok(result);
+  assert.strictEqual(result.sql, 'SELECT ? AS l1, ? AS l2');
+  assert.deepStrictEqual(result.params, [3, 3]);
+});

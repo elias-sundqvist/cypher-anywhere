@@ -1366,6 +1366,7 @@ runOnAdapters('WITH alias named id allowed', async engine => {
 
 runOnAdapters('standalone RETURN expression', async (engine, adapter) => {
   const result = engine.run('RETURN 42 AS val');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.val);
   assert.deepStrictEqual(out, [42]);
@@ -1386,6 +1387,7 @@ runOnAdapters('NULL literal handled in create and match', async (engine, adapter
 runOnAdapters('NULL in arithmetic returns NULL', async (engine, adapter) => {
   const q = 'RETURN null + 1 AS a, 1 + null AS b, null * 2 AS c, -null AS d';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row);
   assert.deepStrictEqual(out, [{ a: null, b: null, c: null, d: null }]);
@@ -1467,6 +1469,7 @@ runOnAdapters('MATCH without variable returns count', async (engine, adapter) =>
 runOnAdapters('length() on list expression returns length', async (engine, adapter) => {
   const q = 'RETURN length([1,2,3]) AS len';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [3]);
@@ -1475,6 +1478,7 @@ runOnAdapters('length() on list expression returns length', async (engine, adapt
 runOnAdapters('length() on string expression returns length', async (engine, adapter) => {
   const q = "RETURN length('abc') AS len";
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [3]);
@@ -1483,6 +1487,7 @@ runOnAdapters('length() on string expression returns length', async (engine, ada
 runOnAdapters('size() on list expression returns length', async (engine, adapter) => {
   const q = 'RETURN size([1,2,3]) AS len';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [3]);
@@ -1491,6 +1496,7 @@ runOnAdapters('size() on list expression returns length', async (engine, adapter
 runOnAdapters('size() on string expression returns length', async (engine, adapter) => {
   const q = "RETURN size('abc') AS len";
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [3]);

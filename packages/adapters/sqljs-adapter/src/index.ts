@@ -564,6 +564,8 @@ export class SqlJsAdapter implements StorageAdapter {
   ): { sql: string; params: any[] } | null {
     if (ast.type === 'MatchReturn') {
       return this.transpileMatchReturn(ast as MatchReturnQuery, params);
+    } else if (ast.type === 'Return') {
+      return this.transpileReturn(ast as ReturnQuery, params);
     }
     return null;
   }
@@ -815,6 +817,24 @@ export class SqlJsAdapter implements StorageAdapter {
     return { sql, params: paramsArr };
   }
 
+  private transpileReturn(
+    retAst: ReturnQuery,
+    params: Record<string, any>
+  ): { sql: string; params: any[] } | null {
+    if (retAst.orderBy || retAst.skip || retAst.limit || retAst.distinct)
+      return null;
+    const sqlParts: string[] = [];
+    const paramsArr: any[] = [];
+    const vars = new Map<string, any>();
+    for (const item of retAst.returnItems) {
+      const alias = item.alias || 'value';
+      const val = this.evalExpr(item.expression, vars, params);
+      sqlParts.push('? AS ' + alias);
+      paramsArr.push(val);
+    }
+    return { sql: 'SELECT ' + sqlParts.join(', '), params: paramsArr };
+  }
+
   runTranspiled(
     cypher: string,
     params: Record<string, any>
@@ -825,6 +845,26 @@ export class SqlJsAdapter implements StorageAdapter {
     const t = this.transpileAST(ast, params);
     if (!t) return null;
     const transpiled = t;
+    if (ast.type === 'Return') {
+      const retAst = ast as ReturnQuery;
+      const self = this;
+      async function* gen() {
+        await self.ensureReady();
+        const stmt = self.db.prepare(transpiled.sql);
+        stmt.bind(transpiled.params);
+        while (stmt.step()) {
+          const row = stmt.getAsObject();
+          const out: Record<string, unknown> = {};
+          for (const item of retAst.returnItems) {
+            const alias = item.alias || 'value';
+            out[alias] = row[alias];
+          }
+          yield out;
+        }
+        stmt.free();
+      }
+      return gen();
+    }
     if (ast.type !== 'MatchReturn') return null;
     const matchAst = ast as MatchReturnQuery;
     const retExprs = matchAst.returnItems.map(i => i.expression);
