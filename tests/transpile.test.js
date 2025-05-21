@@ -527,3 +527,36 @@ test('transpile multiple return properties', () => {
   );
   assert.deepStrictEqual(result.params, ['%"Movie"%']);
 });
+
+test('transpile MIN aggregation', () => {
+  const q = 'MATCH (m:Movie) RETURN MIN(m.released)';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT MIN(json_extract(properties, '$.released')) AS value FROM nodes WHERE labels LIKE ?"
+  );
+  assert.deepStrictEqual(result.params, ['%"Movie"%']);
+});
+
+test('transpile MAX aggregation with alias', () => {
+  const q = 'MATCH (m:Movie) RETURN MAX(m.released) AS mx';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT MAX(json_extract(properties, '$.released')) AS mx FROM nodes WHERE labels LIKE ?"
+  );
+  assert.deepStrictEqual(result.params, ['%"Movie"%']);
+});
+
+test('transpile SUM aggregation', () => {
+  const q = 'MATCH (m:Movie) RETURN SUM(m.released) AS total';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT SUM(json_extract(properties, '$.released')) AS total FROM nodes WHERE labels LIKE ?"
+  );
+  assert.deepStrictEqual(result.params, ['%"Movie"%']);
+});

@@ -586,9 +586,15 @@ export class SqlJsAdapter implements StorageAdapter {
 
     const retExpr = matchAst.returnItems[0].expression;
     const isCount = retExpr.type === 'Count';
-    if (isCount && (retExpr as any).distinct) return null;
+    const isAgg =
+      retExpr.type === 'Min' ||
+      retExpr.type === 'Max' ||
+      retExpr.type === 'Sum' ||
+      retExpr.type === 'Avg';
+    if ((isCount || isAgg) && (retExpr as any).distinct) return null;
     if (
       !isCount &&
+      !isAgg &&
       (matchAst.optional ||
         !(
           (retExpr.type === 'Variable' && retExpr.name === matchAst.variable) ||
@@ -600,6 +606,22 @@ export class SqlJsAdapter implements StorageAdapter {
     let sql = 'SELECT ';
     if (isCount) {
       sql += 'COUNT(*) AS value';
+    } else if (isAgg) {
+      if (
+        retExpr.type !== 'Min' &&
+        retExpr.type !== 'Max' &&
+        retExpr.type !== 'Sum' &&
+        retExpr.type !== 'Avg'
+      )
+        return null;
+      if (
+        retExpr.expression.type !== 'Property' ||
+        retExpr.expression.variable !== matchAst.variable
+      )
+        return null;
+      const func = retExpr.type.toUpperCase();
+      const alias = matchAst.returnItems[0].alias || 'value';
+      sql += `${func}(json_extract(properties, '$.${retExpr.expression.property}')) AS ${alias}`;
     } else if (allowMulti) {
       const parts: string[] = [];
       for (const item of matchAst.returnItems) {
@@ -832,6 +854,13 @@ export class SqlJsAdapter implements StorageAdapter {
             out[alias] = row[col];
           } else if (item.expression.type === 'Count') {
             out[alias] = row.value;
+          } else if (
+            item.expression.type === 'Min' ||
+            item.expression.type === 'Max' ||
+            item.expression.type === 'Sum' ||
+            item.expression.type === 'Avg'
+          ) {
+            out[alias] = row[col];
           }
         }
         yield out;
