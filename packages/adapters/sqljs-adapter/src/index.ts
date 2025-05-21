@@ -886,7 +886,7 @@ export class SqlJsAdapter implements StorageAdapter {
 
     if (ast.type === 'MatchMultiReturn') {
       const multi = ast as MatchMultiReturnQuery;
-      if (multi.optional) return null;
+      const isOptional = multi.optional;
       for (const p of multi.patterns) {
         if (p.labels && p.labels.length > 1) return null;
       }
@@ -1005,7 +1005,12 @@ export class SqlJsAdapter implements StorageAdapter {
       }
 
       async function* genMulti() {
-        const sets = await Promise.all(multi.patterns.map(p => fetch(p)));
+        const sets = await Promise.all(
+          multi.patterns.map(async p => {
+            const res = await fetch(p);
+            return res.length === 0 && isOptional ? [undefined] : res;
+          })
+        );
 
         const hasAggItem = multi.returnItems.map(r => self.hasAgg(r.expression));
         const hasAgg = hasAggItem.some(v => v);
@@ -1095,6 +1100,21 @@ export class SqlJsAdapter implements StorageAdapter {
             }
             rows.push({ row: group.row, order });
           }
+        }
+
+        if (rows.length === 0 && isOptional && !hasAgg) {
+          const empty: Record<string, any> = {};
+          multi.returnItems.forEach((item, idx) => {
+            const alias = aliasFor(item, idx);
+            if (item.expression.type === 'All') {
+              vars.forEach(v => {
+                empty[v] = undefined;
+              });
+            } else {
+              empty[alias] = undefined;
+            }
+          });
+          rows.push({ row: empty });
         }
 
         if (multi.distinct) {
