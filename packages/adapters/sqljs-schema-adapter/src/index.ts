@@ -159,10 +159,10 @@ export class SqlJsSchemaAdapter implements StorageAdapter {
 
   supportsTranspilation = true;
 
-  runTranspiled(
+  transpile(
     cypher: string,
-    params: Record<string, any>
-  ): AsyncIterable<Record<string, unknown>> | null {
+    params: Record<string, any> = {}
+  ): { sql: string; params: any[] } | null {
     const asts = parseMany(cypher);
     if (asts.length !== 1) return null;
     const ast = asts[0];
@@ -170,113 +170,77 @@ export class SqlJsSchemaAdapter implements StorageAdapter {
     const matchAst = ast as MatchReturnQuery;
     if (
       matchAst.isRelationship ||
-      (matchAst.labels && matchAst.labels.length > 1) ||
       matchAst.orderBy ||
       matchAst.skip ||
       matchAst.limit ||
-      matchAst.optional
+      matchAst.distinct ||
+      matchAst.optional ||
+      matchAst.returnItems.length !== 1 ||
+      matchAst.returnItems[0].expression.type !== 'Variable' ||
+      matchAst.returnItems[0].expression.name !== matchAst.variable ||
+      this.schema.nodes.length !== 1 ||
+      (matchAst.labels && matchAst.labels.length > 1)
     )
       return null;
-    if (matchAst.returnItems.length !== 1) return null;
-    const ret = matchAst.returnItems[0];
-    if (ret.expression.type !== 'Variable') return null;
-    const alias = ret.alias || ret.expression.name;
-    if (matchAst.variable !== ret.expression.name) return null;
-    if (this.schema.nodes.length !== 1) return null;
+
     const table = this.schema.nodes[0];
+    if (
+      matchAst.labels &&
+      matchAst.labels.length === 1 &&
+      table.labels &&
+      !table.labels.includes(matchAst.labels[0])
+    )
+      return null;
+
     let sql = `SELECT * FROM ${table.table}`;
     const paramsArr: any[] = [];
     const conds: string[] = [];
-    if (matchAst.labels && matchAst.labels.length === 1) {
-      if (table.labels && !table.labels.includes(matchAst.labels[0])) return null;
+
+    if (matchAst.properties) {
+      for (const [k, v] of Object.entries(matchAst.properties)) {
+        const val =
+          v && typeof v === 'object' && 'type' in v
+            ? v.type === 'Literal'
+              ? (v as any).value
+              : v.type === 'Parameter'
+              ? params[(v as any).name]
+              : undefined
+            : v;
+        if (val === null) {
+          conds.push(`${k} IS NULL`);
+        } else {
+          conds.push(`${k} = ?`);
+          paramsArr.push(val);
+        }
+      }
     }
+
     if (conds.length > 0) sql += ' WHERE ' + conds.join(' AND ');
+    return { sql, params: paramsArr };
+  }
+
+  runTranspiled(
+    cypher: string,
+    params: Record<string, any>
+  ): AsyncIterable<Record<string, unknown>> | null {
+    const asts = parseMany(cypher);
+    if (asts.length !== 1) return null;
+    const ast = asts[0];
+    const t = this.transpile(cypher, params);
+    if (!t || ast.type !== 'MatchReturn') return null;
+    const transpiled = t;
+    const matchAst = ast as MatchReturnQuery;
+    const alias = matchAst.returnItems[0].alias || matchAst.variable;
+    const table = this.schema.nodes[0];
     const self = this;
     async function* gen() {
       await self.ensureReady();
-      const stmt = self.db.prepare(sql);
-      stmt.bind(paramsArr);
+      const stmt = self.db.prepare(transpiled.sql);
+      stmt.bind(transpiled.params);
       while (stmt.step()) {
         const row = stmt.getAsObject();
         const node = self.rowToNode(row, table);
-        if (matchAst.properties) {
-          let ok = true;
-          for (const [k, v] of Object.entries(matchAst.properties)) {
-            const val =
-              v && typeof v === 'object' && 'type' in v
-                ? v.type === 'Literal'
-                  ? (v as any).value
-                  : v.type === 'Parameter'
-                  ? params[(v as any).name]
-                  : undefined
-                : v;
-            if (node.properties[k] !== val) {
-              ok = false;
-              break;
-            }
-          }
-          if (!ok) continue;
-        }
-
-        function exprVal(expr: any): any {
-          if (!expr) return undefined;
-          if (typeof expr === 'object' && 'type' in expr) {
-            if (expr.type === 'Literal') return expr.value;
-            if (expr.type === 'Parameter') return params[expr.name];
-            if (expr.type === 'Property' && expr.variable === matchAst.variable)
-              return node.properties[expr.property];
-          }
-          return expr;
-        }
-
-        function checkWhere(where: any): boolean {
-          if (!where) return true;
-          if (where.type === 'Condition') {
-            const left = exprVal(where.left);
-            const right = exprVal(where.right);
-            switch (where.operator) {
-              case '=':
-                return left === right;
-              case '<>':
-                return left !== right;
-              case '>':
-                return left > right;
-              case '>=':
-                return left >= right;
-              case '<':
-                return left < right;
-              case '<=':
-                return left <= right;
-              case 'IN':
-                return Array.isArray(right) && right.includes(left);
-              case 'IS NULL':
-                return left === null || left === undefined;
-              case 'IS NOT NULL':
-                return left !== null && left !== undefined;
-              case 'STARTS WITH':
-                return typeof left === 'string' && typeof right === 'string' && left.startsWith(right);
-              case 'ENDS WITH':
-                return typeof left === 'string' && typeof right === 'string' && left.endsWith(right);
-              case 'CONTAINS':
-                return typeof left === 'string' && typeof right === 'string' && left.includes(right);
-              default:
-                return false;
-            }
-          }
-          if (where.type === 'And') {
-            return checkWhere(where.left) && checkWhere(where.right);
-          }
-          if (where.type === 'Or') {
-            return checkWhere(where.left) || checkWhere(where.right);
-          }
-          if (where.type === 'Not') {
-            return !checkWhere(where.clause);
-          }
-          return false;
-        }
-
-        if (!checkWhere(matchAst.where)) continue;
-        yield { [alias]: node };
+        yield { [alias]: node } as Record<string, unknown>;
       }
       stmt.free();
     }
