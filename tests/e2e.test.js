@@ -951,6 +951,7 @@ runOnAdapters('chain match with parameter property', async engine => {
 
 runOnAdapters('COUNT aggregation', async (engine, adapter) => {
   const result = engine.run('MATCH (m:Movie) RETURN COUNT(m)');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.value);
   assert.strictEqual(out[0], 2);
@@ -958,14 +959,17 @@ runOnAdapters('COUNT aggregation', async (engine, adapter) => {
 
 runOnAdapters('COUNT on empty result returns 0', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Missing) RETURN COUNT(n) AS cnt');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.cnt);
   assert.deepStrictEqual(out, [0]);
 });
 
-runOnAdapters('OPTIONAL MATCH with COUNT returns 0', async engine => {
+runOnAdapters('OPTIONAL MATCH with COUNT returns 0', async (engine, adapter) => {
+  const result = engine.run('OPTIONAL MATCH (n:Missing) RETURN COUNT(n) AS cnt');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
-  for await (const row of engine.run('OPTIONAL MATCH (n:Missing) RETURN COUNT(n) AS cnt')) out.push(row.cnt);
+  for await (const row of result) out.push(row.cnt);
   assert.deepStrictEqual(out, [0]);
 });
 

@@ -578,14 +578,24 @@ export class SqlJsAdapter implements StorageAdapter {
       matchAst.skip ||
       matchAst.limit ||
       matchAst.distinct ||
-      matchAst.optional ||
-      matchAst.returnItems.length !== 1 ||
-      matchAst.returnItems[0].expression.type !== 'Variable' ||
-      matchAst.returnItems[0].expression.name !== matchAst.variable
+      matchAst.returnItems.length !== 1
     )
       return null;
 
-    let sql = 'SELECT id, labels, properties FROM nodes';
+    const retExpr = matchAst.returnItems[0].expression;
+    const isCount = retExpr.type === 'Count';
+    if (isCount && (retExpr as any).distinct) return null;
+    if (
+      !isCount &&
+      (matchAst.optional ||
+        retExpr.type !== 'Variable' ||
+        retExpr.name !== matchAst.variable)
+    )
+      return null;
+
+    let sql = isCount
+      ? 'SELECT COUNT(*) AS value FROM nodes'
+      : 'SELECT id, labels, properties FROM nodes';
     const paramsArr: any[] = [];
     const conds: string[] = [];
     if (matchAst.labels && matchAst.labels.length > 0) {
@@ -716,15 +726,25 @@ export class SqlJsAdapter implements StorageAdapter {
     const transpiled = t;
     if (ast.type !== 'MatchReturn') return null;
     const matchAst = ast as MatchReturnQuery;
-    const alias = matchAst.returnItems[0].alias || matchAst.variable;
+    const retItem = matchAst.returnItems[0];
+    let alias = retItem.alias;
+    if (!alias) {
+      alias = retItem.expression.type === 'Variable' ? retItem.expression.name : 'value';
+    }
+    const outAlias = alias as string;
     const self = this;
     async function* gen() {
       await self.ensureReady();
       const stmt = self.db.prepare(transpiled.sql);
       stmt.bind(transpiled.params);
       while (stmt.step()) {
-        const node = self.rowToNode(stmt.getAsObject());
-        yield { [alias]: node } as Record<string, unknown>;
+        const row = stmt.getAsObject();
+        if (retItem.expression.type === 'Variable') {
+          const node = self.rowToNode(row);
+          yield { [outAlias]: node } as Record<string, unknown>;
+        } else {
+          yield { [outAlias]: row.value } as Record<string, unknown>;
+        }
       }
       stmt.free();
     }
