@@ -820,13 +820,17 @@ runOnAdapters('OPTIONAL MATCH existing node returns it', async (engine, adapter)
   }
 });
 
-runOnAdapters('OPTIONAL MATCH multiple patterns returns partial row', async engine => {
+runOnAdapters('OPTIONAL MATCH multiple patterns returns partial row', async (engine, adapter) => {
   const q = 'OPTIONAL MATCH (p:Person {name:"Missing"}), (m:Movie {title:"The Matrix"}) RETURN p, m';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row);
+  for await (const row of result) out.push(row);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].m.properties.title, 'The Matrix');
   assert.strictEqual(out[0].p, undefined);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('OPTIONAL MATCH relationship chain missing returns null row', async engine => {
