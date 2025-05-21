@@ -604,3 +604,26 @@ test('transpile SUM aggregation', () => {
   );
   assert.deepStrictEqual(result.params, ['%"Movie"%']);
 });
+
+test('transpile parameterized LIMIT', () => {
+  const q = 'MATCH (n:Person) RETURN n LIMIT $lim';
+  const result = adapter.transpile(q, { lim: 1 });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? LIMIT 1'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile ORDER BY multiple expressions', () => {
+  const q =
+    'MATCH (m:Movie) RETURN m.released AS year, m.title AS title ORDER BY year DESC, title ASC';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT json_extract(properties, '$.released') AS year, json_extract(properties, '$.title') AS title FROM nodes WHERE labels LIKE ? ORDER BY json_extract(properties, '$.released') DESC, json_extract(properties, '$.title') ASC"
+  );
+  assert.deepStrictEqual(result.params, ['%"Movie"%']);
+});
