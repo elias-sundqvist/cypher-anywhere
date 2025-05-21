@@ -604,17 +604,21 @@ runOnAdapters('variable length path can return end node', async engine => {
   assert.deepStrictEqual(out, ['Action']);
 });
 
-runOnAdapters('named single-hop path returns node list', async engine => {
+runOnAdapters('named single-hop path returns node list', async (engine, adapter) => {
   const q =
     'MATCH p=(a:Person {name:"Alice"})-[:ACTED_IN]->(m:Movie {title:"The Matrix"}) RETURN p';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.p);
+  for await (const row of result) out.push(row.p);
   assert.strictEqual(out.length, 1);
   assert.ok(Array.isArray(out[0]));
   assert.deepStrictEqual(
     out[0].map(n => n.properties.name || n.properties.title),
     ['Alice', 'The Matrix']
   );
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('length() on path returns hop count', async engine => {
@@ -826,15 +830,19 @@ runOnAdapters('UNWIND nodes from path', async engine => {
   assert.strictEqual(out.length, 3);
 });
 
-runOnAdapters('relationships() on path returns relationships', async engine => {
+runOnAdapters('relationships() on path returns relationships', async (engine, adapter) => {
   const q =
     'MATCH p=(a:Person {name:"Alice"})-[:ACTED_IN]->(m:Movie {title:"The Matrix"}) RETURN relationships(p) AS rels';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.rels);
+  for await (const row of result) out.push(row.rels);
   assert.strictEqual(out.length, 1);
   assert.ok(Array.isArray(out[0]));
   assert.strictEqual(out[0].length, 1);
   assert.strictEqual(out[0][0].type, 'ACTED_IN');
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('OPTIONAL MATCH missing returns null row', async (engine, adapter) => {
@@ -1653,9 +1661,13 @@ runOnAdapters('size() on string expression returns length', async (engine, adapt
   }
 });
 
-runOnAdapters('size() on path returns hop count', async engine => {
+runOnAdapters('size() on path returns hop count', async (engine, adapter) => {
   const q = 'MATCH p=(a:Person {name:"Alice"})-[:ACTED_IN]->(m:Movie {title:"The Matrix"}) RETURN size(p) AS len';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.len);
+  for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [1]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });

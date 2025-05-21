@@ -327,9 +327,27 @@ export class SqlJsAdapter implements StorageAdapter {
         const rec = vars.get(expr.variable) as NodeRecord | RelRecord | undefined;
         return rec ? rec.id : undefined;
       }
+      case 'Nodes': {
+        const v = vars.get(expr.variable);
+        if (v && typeof v === 'object' && 'nodes' in v) return (v as any).nodes;
+        return undefined;
+      }
+      case 'Relationships': {
+        const v = vars.get(expr.variable);
+        if (v && typeof v === 'object' && 'relationships' in v)
+          return (v as any).relationships;
+        return undefined;
+      }
       case 'Length': {
-        const v = this.evalExpr(expr.expression, vars, params);
+        let v: any;
+        if (expr.expression.type === 'Variable') {
+          v = vars.get(expr.expression.name);
+        } else {
+          v = this.evalExpr(expr.expression, vars, params);
+        }
         if (v == null) return null;
+        if (typeof v === 'object' && 'relationships' in v)
+          return (v as any).relationships.length;
         if (Array.isArray(v) || typeof v === 'string') return v.length;
         return undefined;
       }
@@ -1059,6 +1077,8 @@ export class SqlJsAdapter implements StorageAdapter {
           case 'Property':
           case 'Id':
           case 'Labels':
+          case 'Nodes':
+          case 'Relationships':
             return vars.includes(expr.variable);
           case 'Literal':
           case 'Parameter':
@@ -1337,14 +1357,14 @@ export class SqlJsAdapter implements StorageAdapter {
         chain.skip ||
         chain.limit ||
         chain.distinct ||
-        chain.optional ||
-        chain.pathVariable
+        chain.optional
       )
         return null;
       const hop = chain.hops[0];
       if (hop.rel.direction === 'none') return null;
       const vars = [chain.start.variable, hop.node.variable];
       if (hop.rel.variable) vars.push(hop.rel.variable);
+      if (chain.pathVariable) vars.push(chain.pathVariable);
       function checkExpr(expr: Expression): boolean {
         switch (expr.type) {
           case 'Variable':
@@ -1352,6 +1372,8 @@ export class SqlJsAdapter implements StorageAdapter {
           case 'Property':
           case 'Id':
           case 'Labels':
+          case 'Nodes':
+          case 'Relationships':
             return vars.includes(expr.variable);
           case 'Literal':
           case 'Parameter':
@@ -1530,6 +1552,11 @@ export class SqlJsAdapter implements StorageAdapter {
           varsMap.set(chain.start.variable, n1);
           varsMap.set(hop.node.variable, n2);
           if (hop.rel.variable) varsMap.set(hop.rel.variable, rel);
+          if (chain.pathVariable)
+            varsMap.set(chain.pathVariable, {
+              nodes: [n1, n2],
+              relationships: [rel],
+            });
           if (chain.where && !evalWhere(chain.where, varsMap)) continue;
           const outRow: Record<string, any> = {};
           chain.returnItems.forEach((item: any, idx: number) => {
