@@ -65,6 +65,7 @@ runOnAdapters('MATCH with label', async (engine, adapter) => {
 
 runOnAdapters('MATCH with property filter', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person {name:"Alice"}) RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
@@ -163,6 +164,7 @@ runOnAdapters('create node with label', async engine => {
 
 runOnAdapters('match by secondary label', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Actor) RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
@@ -171,6 +173,7 @@ runOnAdapters('match by secondary label', async (engine, adapter) => {
 runOnAdapters('match with multiple labels', async (engine, adapter) => {
   const out = [];
   const result = engine.run('MATCH (n:Person:Actor) RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Carol');
@@ -203,9 +206,11 @@ runOnAdapters('multi statement merge and delete', async engine => {
   assert.strictEqual(out.length, 0);
 });
 
-runOnAdapters('index match for person', async engine => {
+runOnAdapters('index match for person', async (engine, adapter) => {
+  const result = engine.run('MATCH (n:Person {name:"Alice"}) RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
-  for await (const row of engine.run('MATCH (n:Person {name:"Alice"}) RETURN n')) out.push(row.n);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
 });
 
@@ -386,6 +391,7 @@ runOnAdapters('set property on multiple nodes using expression', async engine =>
 
 runOnAdapters('match with WHERE filter', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person) WHERE n.name = "Alice" RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
@@ -394,6 +400,7 @@ runOnAdapters('match with WHERE filter', async (engine, adapter) => {
 
 runOnAdapters('match with WHERE inequality', async (engine, adapter) => {
   const result = engine.run('MATCH (m:Movie) WHERE m.released > 2000 RETURN m');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.m);
   assert.strictEqual(out.length, 1);
@@ -402,6 +409,7 @@ runOnAdapters('match with WHERE inequality', async (engine, adapter) => {
 
 runOnAdapters('match with WHERE less than inequality', async (engine, adapter) => {
   const result = engine.run('MATCH (m:Movie) WHERE m.released < 2000 RETURN m');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.m);
   assert.strictEqual(out.length, 1);
@@ -424,6 +432,7 @@ runOnAdapters('match all ACTED_IN relationships', async (engine, adapter) => {
 
 runOnAdapters('match with WHERE using AND', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person) WHERE n.name = "Alice" AND n.name = "Bob" RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 0);
@@ -431,6 +440,7 @@ runOnAdapters('match with WHERE using AND', async (engine, adapter) => {
 
 runOnAdapters('match with WHERE using OR', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person) WHERE n.name = "Alice" OR n.name = "Bob" RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 2);
@@ -438,6 +448,7 @@ runOnAdapters('match with WHERE using OR', async (engine, adapter) => {
 
 runOnAdapters('match with WHERE using NOT', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person) WHERE NOT n.name = "Alice" RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 2);
@@ -445,6 +456,7 @@ runOnAdapters('match with WHERE using NOT', async (engine, adapter) => {
 
 runOnAdapters('match with WHERE not equals operator', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person) WHERE n.name <> "Alice" RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 2);
@@ -453,6 +465,7 @@ runOnAdapters('match with WHERE not equals operator', async (engine, adapter) =>
 runOnAdapters('match with WHERE IN list', async (engine, adapter) => {
   const q = 'MATCH (n:Person) WHERE n.name IN ["Alice", "Bob"] RETURN n';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n.properties.name);
   assert.deepStrictEqual(out.sort(), ['Alice', 'Bob']);
@@ -461,6 +474,7 @@ runOnAdapters('match with WHERE IN list', async (engine, adapter) => {
 runOnAdapters('match with parameterized IN', async (engine, adapter) => {
   const q = "MATCH (n:Person) WHERE n.name IN $names RETURN n";
   const result = engine.run(q, { names: ["Alice", "Bob"] });
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n.properties.name);
   assert.deepStrictEqual(out.sort(), ["Alice", "Bob"]);
@@ -470,6 +484,7 @@ runOnAdapters('WHERE clause with parentheses', async (engine, adapter) => {
   const q =
     'MATCH (n:Person) WHERE (n.name = "Alice" OR n.name = "Bob") RETURN n';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n.properties.name);
   assert.deepStrictEqual(out.sort(), ['Alice', 'Bob']);
@@ -478,6 +493,7 @@ runOnAdapters('WHERE clause with parentheses', async (engine, adapter) => {
 runOnAdapters('match with WHERE STARTS WITH', async (engine, adapter) => {
   const q = 'MATCH (n:Person) WHERE n.name STARTS WITH "A" RETURN n';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n.properties.name);
   assert.deepStrictEqual(out, ['Alice']);
@@ -486,6 +502,7 @@ runOnAdapters('match with WHERE STARTS WITH', async (engine, adapter) => {
 runOnAdapters('match with WHERE ENDS WITH', async (engine, adapter) => {
   const q = 'MATCH (n:Person) WHERE n.name ENDS WITH "b" RETURN n';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n.properties.name);
   assert.deepStrictEqual(out, ['Bob']);
@@ -494,6 +511,7 @@ runOnAdapters('match with WHERE ENDS WITH', async (engine, adapter) => {
 runOnAdapters('match with WHERE CONTAINS', async (engine, adapter) => {
   const q = 'MATCH (n:Person) WHERE n.name CONTAINS "ar" RETURN n';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n.properties.name);
   assert.deepStrictEqual(out, ['Carol']);

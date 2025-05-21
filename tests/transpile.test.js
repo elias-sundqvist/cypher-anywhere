@@ -190,3 +190,43 @@ test('transpile with complex WHERE', () => {
   );
   assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice', 30]);
 });
+
+test('transpile with WHERE >= comparison', () => {
+  const q = 'MATCH (n:Person) WHERE n.age >= 20 RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.age\') >= ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 20]);
+});
+
+test('transpile with WHERE < comparison', () => {
+  const q = 'MATCH (n:Person) WHERE n.age < 50 RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.age\') < ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 50]);
+});
+
+test('transpile returns null for ORDER BY', () => {
+  const q = 'MATCH (n:Person) RETURN n ORDER BY n.name';
+  const result = adapter.transpile(q);
+  assert.strictEqual(result, null);
+});
+
+test('transpile returns null for LIMIT', () => {
+  const q = 'MATCH (n:Person) RETURN n LIMIT 1';
+  const result = adapter.transpile(q);
+  assert.strictEqual(result, null);
+});
+
+test('transpile returns null for relationship match', () => {
+  const q = 'MATCH ()-[r:REL]->() RETURN r';
+  const result = adapter.transpile(q);
+  assert.strictEqual(result, null);
+});
