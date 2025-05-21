@@ -572,12 +572,17 @@ export class SqlJsAdapter implements StorageAdapter {
     matchAst: MatchReturnQuery,
     params: Record<string, any>
   ): { sql: string; params: any[] } | null {
-    if (
-      matchAst.isRelationship ||
-      matchAst.distinct ||
-      matchAst.returnItems.length !== 1
-    )
-      return null;
+    if (matchAst.isRelationship || matchAst.distinct) return null;
+
+    const retExprs = matchAst.returnItems.map(i => i.expression);
+    if (retExprs.some(e => e.type === 'Count') && retExprs.length > 1) return null;
+
+    const allowMulti =
+      retExprs.every(
+        e => e.type === 'Property' && e.variable === matchAst.variable
+      ) && retExprs.length > 1;
+
+    if (!allowMulti && matchAst.returnItems.length !== 1) return null;
 
     const retExpr = matchAst.returnItems[0].expression;
     const isCount = retExpr.type === 'Count';
@@ -595,10 +600,20 @@ export class SqlJsAdapter implements StorageAdapter {
     let sql = 'SELECT ';
     if (isCount) {
       sql += 'COUNT(*) AS value';
+    } else if (allowMulti) {
+      const parts: string[] = [];
+      for (const item of matchAst.returnItems) {
+        const alias = item.alias || (item.expression as any).property;
+        parts.push(
+          `json_extract(properties, '$.${(item.expression as any).property}') AS ${alias}`
+        );
+      }
+      sql += parts.join(', ');
     } else if (retExpr.type === 'Variable') {
       sql += 'id, labels, properties';
     } else {
-      sql += `json_extract(properties, '$.${(retExpr as any).property}') AS value`;
+      const alias = matchAst.returnItems[0].alias || 'value';
+      sql += `json_extract(properties, '$.${(retExpr as any).property}') AS ${alias}`;
     }
     sql += ' FROM nodes';
     const paramsArr: any[] = [];
@@ -731,15 +746,24 @@ export class SqlJsAdapter implements StorageAdapter {
     if (conds.length > 0) sql += ' WHERE ' + conds.join(' AND ');
 
     if (matchAst.orderBy && matchAst.orderBy.length > 0) {
+      const aliasMap = new Map<string, string>();
+      if (allowMulti) {
+        for (const item of matchAst.returnItems) {
+          const a = item.alias || (item.expression as any).property;
+          aliasMap.set(a, (item.expression as any).property);
+        }
+      } else if (retExpr.type === 'Property') {
+        aliasMap.set(matchAst.returnItems[0].alias || 'value', retExpr.property);
+      }
       const orderParts: string[] = [];
       for (const ob of matchAst.orderBy) {
         let exprSql: string | null = null;
         if (ob.expression.type === 'Variable') {
           if (ob.expression.name === matchAst.variable) {
             exprSql = 'id';
-          } else if (matchAst.returnItems[0].alias === ob.expression.name) {
-            if (retExpr.type === 'Variable') exprSql = 'id';
-            else exprSql = `json_extract(properties, '$.${(retExpr as any).property}')`;
+          } else if (aliasMap.has(ob.expression.name)) {
+            const prop = aliasMap.get(ob.expression.name)!;
+            exprSql = `json_extract(properties, '$.${prop}')`;
           }
         } else if (
           ob.expression.type === 'Property' &&
@@ -781,12 +805,10 @@ export class SqlJsAdapter implements StorageAdapter {
     const transpiled = t;
     if (ast.type !== 'MatchReturn') return null;
     const matchAst = ast as MatchReturnQuery;
-    const retItem = matchAst.returnItems[0];
-    let alias = retItem.alias;
-    if (!alias) {
-      alias = retItem.expression.type === 'Variable' ? retItem.expression.name : 'value';
-    }
-    const outAlias = alias as string;
+    const retExprs = matchAst.returnItems.map(i => i.expression);
+    const allowMulti =
+      retExprs.every(e => e.type === 'Property' && e.variable === matchAst.variable) &&
+      retExprs.length > 1;
     const self = this;
     async function* gen() {
       await self.ensureReady();
@@ -794,12 +816,25 @@ export class SqlJsAdapter implements StorageAdapter {
       stmt.bind(transpiled.params);
       while (stmt.step()) {
         const row = stmt.getAsObject();
-        if (retItem.expression.type === 'Variable') {
-          const node = self.rowToNode(row);
-          yield { [outAlias]: node } as Record<string, unknown>;
-        } else {
-          yield { [outAlias]: row.value } as Record<string, unknown>;
+        const out: Record<string, unknown> = {};
+        for (const item of matchAst.returnItems) {
+          const alias =
+            item.alias ||
+            (allowMulti
+              ? (item.expression as any).property
+              : item.expression.type === 'Variable'
+              ? item.expression.name
+              : 'value');
+          const col = alias;
+          if (item.expression.type === 'Variable') {
+            out[alias] = self.rowToNode(row);
+          } else if (item.expression.type === 'Property') {
+            out[alias] = row[col];
+          } else if (item.expression.type === 'Count') {
+            out[alias] = row.value;
+          }
         }
+        yield out;
       }
       stmt.free();
     }

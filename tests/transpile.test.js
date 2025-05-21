@@ -446,7 +446,7 @@ test('transpile return property with ORDER BY', () => {
   assert.ok(result);
   assert.strictEqual(
     result.sql,
-    "SELECT json_extract(properties, '$.name') AS value FROM nodes WHERE labels LIKE ? ORDER BY json_extract(properties, '$.name') DESC"
+    "SELECT json_extract(properties, '$.name') AS name FROM nodes WHERE labels LIKE ? ORDER BY json_extract(properties, '$.name') DESC"
   );
   assert.deepStrictEqual(result.params, ['%"Person"%']);
 });
@@ -457,7 +457,7 @@ test('transpile ORDER BY with SKIP and LIMIT', () => {
   assert.ok(result);
   assert.strictEqual(
     result.sql,
-    "SELECT json_extract(properties, '$.name') AS value FROM nodes WHERE labels LIKE ? ORDER BY json_extract(properties, '$.name') LIMIT 2 OFFSET 1"
+    "SELECT json_extract(properties, '$.name') AS name FROM nodes WHERE labels LIKE ? ORDER BY json_extract(properties, '$.name') LIMIT 2 OFFSET 1"
   );
   assert.deepStrictEqual(result.params, ['%"Person"%']);
 });
@@ -471,4 +471,59 @@ test('transpile RETURN node with LIMIT', () => {
     'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? LIMIT 1'
   );
   assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile SKIP only', () => {
+  const q = 'MATCH (n:Person) RETURN n SKIP 1';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? LIMIT -1 OFFSET 1'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile parameterized SKIP', () => {
+  const q = 'MATCH (n:Person) RETURN n SKIP $s';
+  const result = adapter.transpile(q, { s: 2 });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? LIMIT -1 OFFSET 2'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile WHERE id IN parameter list', () => {
+  const q = 'MATCH (n) WHERE id(n) IN $ids RETURN n';
+  const result = adapter.transpile(q, { ids: [1, 2] });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE id IN (?, ?)'
+  );
+  assert.deepStrictEqual(result.params, [1, 2]);
+});
+
+test('transpile COUNT without variable', () => {
+  const q = 'MATCH (:Person) RETURN COUNT(*) AS cnt';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT COUNT(*) AS value FROM nodes WHERE labels LIKE ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile multiple return properties', () => {
+  const q = 'MATCH (m:Movie) RETURN m.title AS title, m.released AS year ORDER BY year';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT json_extract(properties, '$.title') AS title, json_extract(properties, '$.released') AS year FROM nodes WHERE labels LIKE ? ORDER BY json_extract(properties, '$.released')"
+  );
+  assert.deepStrictEqual(result.params, ['%"Movie"%']);
 });
