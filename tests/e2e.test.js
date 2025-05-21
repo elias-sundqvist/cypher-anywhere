@@ -1446,15 +1446,19 @@ runOnAdapters('RETURN star returns all variables', async (engine, adapter) => {
   }
 });
 
-runOnAdapters('RETURN star with relationship chain', async engine => {
+runOnAdapters('RETURN star with relationship chain', async (engine, adapter) => {
   const q = 'MATCH (p:Person {name:"Alice"})-[r:ACTED_IN]->(m:Movie {title:"John Wick"}) RETURN *';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row);
+  for await (const row of result) out.push(row);
   assert.strictEqual(out.length, 1);
   assert.ok(out[0].p && out[0].r && out[0].m);
   assert.strictEqual(out[0].p.properties.name, 'Alice');
   assert.strictEqual(out[0].m.properties.title, 'John Wick');
   assert.strictEqual(out[0].r.type, 'ACTED_IN');
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 runOnAdapters('id() function returns node id', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person {name:"Alice"}) RETURN id(n) AS id');
@@ -1466,18 +1470,26 @@ runOnAdapters('id() function returns node id', async (engine, adapter) => {
   }
 });
 
-runOnAdapters('id() on relationship returns rel id', async engine => {
-  const out = [];
+runOnAdapters('id() on relationship returns rel id', async (engine, adapter) => {
   const q = 'MATCH ()-[r:ACTED_IN {role:"Neo"}]->() RETURN id(r) AS id';
-  for await (const row of engine.run(q)) out.push(row.id);
+  const result = engine.run(q);
+  const out = [];
+  for await (const row of result) out.push(row.id);
   assert.deepStrictEqual(out, [7]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('type() on relationship returns rel type', async engine => {
-  const out = [];
+runOnAdapters('type() on relationship returns rel type', async (engine, adapter) => {
   const q = 'MATCH ()-[r:ACTED_IN {role:"Neo"}]->() RETURN type(r) AS type';
-  for await (const row of engine.run(q)) out.push(row.type);
+  const result = engine.run(q);
+  const out = [];
+  for await (const row of result) out.push(row.type);
   assert.deepStrictEqual(out, ['ACTED_IN']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('labels() function returns node labels', async (engine, adapter) => {
@@ -1653,9 +1665,13 @@ runOnAdapters('size() on string expression returns length', async (engine, adapt
   }
 });
 
-runOnAdapters('size() on path returns hop count', async engine => {
+runOnAdapters('size() on path returns hop count', async (engine, adapter) => {
   const q = 'MATCH p=(a:Person {name:"Alice"})-[:ACTED_IN]->(m:Movie {title:"The Matrix"}) RETURN size(p) AS len';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.len);
+  for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [1]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
