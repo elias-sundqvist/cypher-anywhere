@@ -172,17 +172,25 @@ runOnAdapters('create node with label', async engine => {
   assert.strictEqual(out.length, 1);
 });
 
-runOnAdapters('match by secondary label', async engine => {
+runOnAdapters('match by secondary label', async (engine, adapter) => {
+  const result = engine.run('MATCH (n:Actor) RETURN n');
   const out = [];
-  for await (const row of engine.run('MATCH (n:Actor) RETURN n')) out.push(row.n);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('match with multiple labels', async engine => {
+runOnAdapters('match with multiple labels', async (engine, adapter) => {
+  const result = engine.run('MATCH (n:Person:Actor) RETURN n');
   const out = [];
-  for await (const row of engine.run('MATCH (n:Person:Actor) RETURN n')) out.push(row.n);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Carol');
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('create node with multiple labels', async engine => {

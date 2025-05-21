@@ -547,8 +547,7 @@ export class SqlJsAdapter implements StorageAdapter {
   ): AsyncIterable<Record<string, unknown>> | null {
     if (ast.type === 'MatchReturn') {
       const matchAst = ast as MatchReturnQuery;
-    if (matchAst.labels && matchAst.labels.length > 1) return null;
-    if (matchAst.isRelationship) {
+      if (matchAst.isRelationship) {
       if (matchAst.where || matchAst.orderBy || matchAst.skip || matchAst.limit || matchAst.distinct)
         return null;
       function checkRelExpr(expr: Expression): boolean {
@@ -680,9 +679,11 @@ export class SqlJsAdapter implements StorageAdapter {
     let sql = 'SELECT id, labels, properties FROM nodes';
     const paramsArr: any[] = [];
     const conds: string[] = [];
-    if (matchAst.labels && matchAst.labels.length === 1) {
-      conds.push('labels LIKE ?');
-      paramsArr.push(`%"${matchAst.labels[0]}"%`);
+    if (matchAst.labels && matchAst.labels.length > 0) {
+      for (const lbl of matchAst.labels) {
+        conds.push('labels LIKE ?');
+        paramsArr.push(`%"${lbl}"%`);
+      }
     }
     if (matchAst.properties) {
       for (const [k, v] of Object.entries(matchAst.properties)) {
@@ -958,9 +959,6 @@ export class SqlJsAdapter implements StorageAdapter {
     if (ast.type === 'MatchMultiReturn') {
       const multi = ast as MatchMultiReturnQuery;
       const isOptional = multi.optional;
-      for (const p of multi.patterns) {
-        if (p.labels && p.labels.length > 1) return null;
-      }
       const vars = multi.patterns.map(p => p.variable);
       function checkExpr(expr: Expression): boolean {
         switch (expr.type) {
@@ -1005,9 +1003,11 @@ export class SqlJsAdapter implements StorageAdapter {
         let sql = 'SELECT id, labels, properties FROM nodes';
         const paramsArr: any[] = [];
         const conds: string[] = [];
-        if (p.labels && p.labels.length === 1) {
-          conds.push('labels LIKE ?');
-          paramsArr.push(`%"${p.labels[0]}"%`);
+        if (p.labels && p.labels.length > 0) {
+          for (const lbl of p.labels) {
+            conds.push('labels LIKE ?');
+            paramsArr.push(`%"${lbl}"%`);
+          }
         }
         if (p.properties) {
           for (const [k, v] of Object.entries(p.properties)) {
