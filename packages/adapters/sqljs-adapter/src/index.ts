@@ -540,7 +540,6 @@ export class SqlJsAdapter implements StorageAdapter {
     const matchAst = ast as MatchReturnQuery;
     if (
       matchAst.isRelationship ||
-      (matchAst.labels && matchAst.labels.length > 1) ||
       matchAst.optional
     )
       return null;
@@ -608,9 +607,11 @@ export class SqlJsAdapter implements StorageAdapter {
     let sql = 'SELECT id, labels, properties FROM nodes';
     const paramsArr: any[] = [];
     const conds: string[] = [];
-    if (matchAst.labels && matchAst.labels.length === 1) {
-      conds.push('labels LIKE ?');
-      paramsArr.push(`%"${matchAst.labels[0]}"%`);
+    if (matchAst.labels && matchAst.labels.length > 0) {
+      for (const lbl of matchAst.labels) {
+        conds.push('labels LIKE ?');
+        paramsArr.push(`%"${lbl}"%`);
+      }
     }
     if (matchAst.properties) {
       for (const [k, v] of Object.entries(matchAst.properties)) {

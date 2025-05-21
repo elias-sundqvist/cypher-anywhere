@@ -170,7 +170,6 @@ export class SqlJsSchemaAdapter implements StorageAdapter {
     const matchAst = ast as MatchReturnQuery;
     if (
       matchAst.isRelationship ||
-      (matchAst.labels && matchAst.labels.length > 1) ||
       matchAst.orderBy ||
       matchAst.skip ||
       matchAst.limit ||
@@ -187,8 +186,10 @@ export class SqlJsSchemaAdapter implements StorageAdapter {
     let sql = `SELECT * FROM ${table.table}`;
     const paramsArr: any[] = [];
     const conds: string[] = [];
-    if (matchAst.labels && matchAst.labels.length === 1) {
-      if (table.labels && !table.labels.includes(matchAst.labels[0])) return null;
+    if (matchAst.labels && matchAst.labels.length > 0) {
+      if (table.labels && !matchAst.labels.every(l => table.labels!.includes(l))) {
+        return null;
+      }
     }
     if (conds.length > 0) sql += ' WHERE ' + conds.join(' AND ');
     const self = this;
