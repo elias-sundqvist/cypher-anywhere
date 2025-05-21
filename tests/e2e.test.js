@@ -763,22 +763,34 @@ runOnAdapters('create node with list property', async engine => {
   assert.deepStrictEqual(ev.properties.tags, ['neo4j', 'conf']);
 });
 
-runOnAdapters('UNWIND literal list returns rows', async engine => {
+runOnAdapters('UNWIND literal list returns rows', async (engine, adapter) => {
+  const result = engine.run('UNWIND [1,2,3] AS x RETURN x');
   const out = [];
-  for await (const row of engine.run('UNWIND [1,2,3] AS x RETURN x')) out.push(row.x);
+  for await (const row of result) out.push(row.x);
   assert.deepStrictEqual(out.sort(), [1, 2, 3]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('UNWIND expression on list items', async engine => {
+runOnAdapters('UNWIND expression on list items', async (engine, adapter) => {
+  const result = engine.run('UNWIND [1,2,3] AS x RETURN x + 1');
   const out = [];
-  for await (const row of engine.run('UNWIND [1,2,3] AS x RETURN x + 1')) out.push(row.value);
+  for await (const row of result) out.push(row.value);
   assert.deepStrictEqual(out.sort(), [2, 3, 4]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('UNWIND with return alias', async engine => {
+runOnAdapters('UNWIND with return alias', async (engine, adapter) => {
+  const result = engine.run('UNWIND [1,2,3] AS x RETURN x AS val');
   const out = [];
-  for await (const row of engine.run('UNWIND [1,2,3] AS x RETURN x AS val')) out.push(row.val);
+  for await (const row of result) out.push(row.val);
   assert.deepStrictEqual(out.sort(), [1, 2, 3]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('UNWIND nodes from path', async engine => {
@@ -1235,7 +1247,9 @@ runOnAdapters('CALL with ORDER BY SKIP LIMIT', async (engine, adapter) => {
   const out = [];
   for await (const row of result) out.push(row.x);
   assert.deepStrictEqual(out, [2]);
-  // UNWIND is not yet transpiled
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('single hop match without rel variable', async engine => {

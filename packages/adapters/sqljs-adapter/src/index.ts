@@ -9,6 +9,7 @@ import {
   MatchReturnQuery,
   MatchMultiReturnQuery,
   ReturnQuery,
+  UnwindQuery,
   Expression,
   CypherAST,
   UnionQuery,
@@ -1167,7 +1168,35 @@ export class SqlJsAdapter implements StorageAdapter {
           yield rows[i].row;
         }
       }
+
       return genMulti();
+    }
+
+    if (ast.type === 'Unwind') {
+      const un = ast as UnwindQuery;
+      const self = this;
+      async function* genUnwind() {
+        let items: unknown[];
+        if (Array.isArray(un.list)) {
+          items = un.list;
+        } else {
+          const v = self.evalExpr(un.list, new Map(), params);
+          items = Array.isArray(v) ? v : [];
+        }
+        for (const item of items) {
+          const vars = new Map<string, any>();
+          vars.set(un.variable, item);
+          const val = self.evalExpr(un.returnExpression, vars, params);
+          const alias =
+            un.returnAlias ||
+            (un.returnExpression.type === 'Variable' &&
+            un.returnExpression.name === un.variable
+              ? un.variable
+              : 'value');
+          yield { [alias]: val } as Record<string, any>;
+        }
+      }
+      return genUnwind();
     }
 
     if (ast.type === 'Return') {
