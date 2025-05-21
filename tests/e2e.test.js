@@ -1234,12 +1234,14 @@ runOnAdapters('MATCH with multiple node patterns', async (engine, adapter) => {
   assert.strictEqual(out.length, 6);
 });
 
-runOnAdapters('negative numeric literals parsed correctly', async engine => {
+runOnAdapters('negative numeric literals parsed correctly', async (engine, adapter) => {
   let node;
   for await (const row of engine.run('CREATE (n:Neg {val:-5}) RETURN n')) node = row.n;
   assert.strictEqual(node.properties.val, -5);
+  const result = engine.run('MATCH (n:Neg) WHERE n.val < -1 RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
-  for await (const row of engine.run('MATCH (n:Neg) WHERE n.val < -1 RETURN n')) out.push(row.n);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
 });
 runOnAdapters('arithmetic subtraction in RETURN', async (engine, adapter) => {
@@ -1344,6 +1346,7 @@ runOnAdapters('NULL literal handled in create and match', async (engine, adapter
     node = row.n;
   assert.strictEqual(node.properties.v, null);
   const result = engine.run('MATCH (n:NullTest) WHERE n.v = null RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
