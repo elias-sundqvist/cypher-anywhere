@@ -546,11 +546,72 @@ export class SqlJsAdapter implements StorageAdapter {
   ): AsyncIterable<Record<string, unknown>> | null {
     if (ast.type === 'MatchReturn') {
       const matchAst = ast as MatchReturnQuery;
-    if (
-      matchAst.isRelationship ||
-      (matchAst.labels && matchAst.labels.length > 1)
-    )
-      return null;
+    if (matchAst.labels && matchAst.labels.length > 1) return null;
+    if (matchAst.isRelationship) {
+      if (matchAst.where || matchAst.orderBy || matchAst.skip || matchAst.limit || matchAst.distinct)
+        return null;
+      function checkRelExpr(expr: Expression): boolean {
+        switch (expr.type) {
+          case 'Variable':
+            return expr.name === matchAst.variable;
+          case 'Property':
+          case 'Id':
+          case 'Labels':
+            return expr.variable === matchAst.variable;
+          case 'Literal':
+          case 'Parameter':
+            return true;
+          default:
+            return false;
+        }
+      }
+      for (const ri of matchAst.returnItems) if (!checkRelExpr(ri.expression)) return null;
+      const self = this;
+      async function* genRel() {
+        await self.ensureReady();
+        let sql = 'SELECT id, type, startNode, endNode, properties FROM edges';
+        const paramsArr: any[] = [];
+        const conds: string[] = [];
+        if (matchAst.labels && matchAst.labels.length === 1) {
+          conds.push('type = ?');
+          paramsArr.push(matchAst.labels[0]);
+        }
+        if (matchAst.properties) {
+          for (const [k, v] of Object.entries(matchAst.properties)) {
+            const val =
+              v && typeof v === 'object' && 'type' in v
+                ? v.type === 'Literal'
+                  ? (v as any).value
+                  : v.type === 'Parameter'
+                  ? params[(v as any).name]
+                  : undefined
+                : v;
+            if (val === null) {
+              conds.push(`json_extract(properties, '$.${k}') IS NULL`);
+            } else {
+              conds.push(`json_extract(properties, '$.${k}') = ?`);
+              paramsArr.push(val);
+            }
+          }
+        }
+        if (conds.length > 0) sql += ' WHERE ' + conds.join(' AND ');
+        const stmt = self.db.prepare(sql);
+        stmt.bind(paramsArr);
+        while (stmt.step()) {
+          const rel = self.rowToRel(stmt.getAsObject());
+          const vars = new Map<string, any>();
+          vars.set(matchAst.variable, rel);
+          const row: Record<string, any> = {};
+          matchAst.returnItems.forEach((item, idx) => {
+            const alias = item.alias || (item.expression.type === 'Variable' ? item.expression.name : `value${idx}`);
+            row[alias] = self.evalExpr(item.expression, vars, params);
+          });
+          yield row;
+        }
+        stmt.free();
+      }
+      return genRel();
+    }
     const isOptional = matchAst.optional;
     function checkExpr(expr: Expression): boolean {
       switch (expr.type) {

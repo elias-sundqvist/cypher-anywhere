@@ -147,11 +147,15 @@ runOnAdapters('update relationship property', async engine => {
   }
 });
 
-runOnAdapters('delete relationship', async engine => {
+runOnAdapters('delete relationship', async (engine, adapter) => {
   for await (const _ of engine.run('MATCH ()-[r:IN_GENRE]->() DELETE r')) {}
+  const result = engine.run('MATCH ()-[r:IN_GENRE]->() RETURN r');
   const out = [];
-  for await (const row of engine.run('MATCH ()-[r:IN_GENRE]->() RETURN r')) out.push(row.r);
+  for await (const row of result) out.push(row.r);
   assert.strictEqual(out.length, 0);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('merge relationship between existing nodes', async engine => {
@@ -313,11 +317,15 @@ runOnAdapters('merge relationship creates nodes from pattern', async (engine, ad
 });
 
 
-runOnAdapters('relationship deleted is gone', async engine => {
+runOnAdapters('relationship deleted is gone', async (engine, adapter) => {
   for await (const _ of engine.run('MATCH ()-[r:ACTED_IN {role:"Buddy"}]->() DELETE r')) {}
+  const result = engine.run('MATCH ()-[r:ACTED_IN {role:"Buddy"}]->() RETURN r');
   const out = [];
-  for await (const row of engine.run('MATCH ()-[r:ACTED_IN {role:"Buddy"}]->() RETURN r')) out.push(row.r);
+  for await (const row of result) out.push(row.r);
   assert.strictEqual(out.length, 0);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('create relationship and return nodes', async engine => {
@@ -428,10 +436,14 @@ runOnAdapters('match relationship with WHERE', async engine => {
   assert.strictEqual(out[0].properties.flag, true);
 });
 
-runOnAdapters('match all ACTED_IN relationships', async engine => {
+runOnAdapters('match all ACTED_IN relationships', async (engine, adapter) => {
+  const result = engine.run('MATCH ()-[r:ACTED_IN]->() RETURN r');
   const out = [];
-  for await (const row of engine.run('MATCH ()-[r:ACTED_IN]->() RETURN r')) out.push(row.r);
+  for await (const row of result) out.push(row.r);
   assert.strictEqual(out.length, 3);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('match with WHERE using AND', async (engine, adapter) => {
