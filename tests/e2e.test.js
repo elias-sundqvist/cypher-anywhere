@@ -182,6 +182,15 @@ runOnAdapters('match with multiple labels', async (engine, adapter) => {
   assert.strictEqual(out[0].properties.name, 'Carol');
 });
 
+runOnAdapters('match node by id', async (engine, adapter) => {
+  const result = engine.run('MATCH (n:Person) WHERE id(n) = 1 RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  const out = [];
+  for await (const row of result) out.push(row.n);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].properties.name, 'Alice');
+});
+
 runOnAdapters('create node with multiple labels', async engine => {
   let node;
   for await (const row of engine.run('CREATE (n:Multi:One {v:1}) RETURN n')) node = row.n;
