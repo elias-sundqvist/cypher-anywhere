@@ -7,6 +7,7 @@ import {
   IndexMetadata,
   parseMany,
   MatchReturnQuery,
+  MatchMultiReturnQuery,
   Expression
 } from '@cypher-anywhere/core';
 import type * as fsType from 'fs';
@@ -536,14 +537,14 @@ export class SqlJsAdapter implements StorageAdapter {
     const asts = parseMany(cypher);
     if (asts.length !== 1) return null;
     const ast = asts[0];
-    if (ast.type !== 'MatchReturn') return null;
-    const matchAst = ast as MatchReturnQuery;
+    if (ast.type === 'MatchReturn') {
+      const matchAst = ast as MatchReturnQuery;
     if (
       matchAst.isRelationship ||
-      (matchAst.labels && matchAst.labels.length > 1) ||
-      matchAst.optional
+      (matchAst.labels && matchAst.labels.length > 1)
     )
       return null;
+    const isOptional = matchAst.optional;
     function checkExpr(expr: Expression): boolean {
       switch (expr.type) {
         case 'Variable':
@@ -821,6 +822,19 @@ export class SqlJsAdapter implements StorageAdapter {
         }
       }
 
+      if (rows.length === 0 && isOptional && !hasAgg) {
+        const empty: Record<string, any> = {};
+        matchAst.returnItems.forEach((item, idx) => {
+          const alias = aliasFor(item, idx);
+          if (item.expression.type === 'All') {
+            empty[matchAst.variable] = undefined;
+          } else {
+            empty[alias] = undefined;
+          }
+        });
+        rows.push({ row: empty });
+      }
+
       if (matchAst.distinct) {
         const seen = new Set<string>();
         const uniq: typeof rows = [];
@@ -867,6 +881,267 @@ export class SqlJsAdapter implements StorageAdapter {
         yield r.row;
       }
     }
-    return gen();
+      return gen();
+    }
+
+    if (ast.type === 'MatchMultiReturn') {
+      const multi = ast as MatchMultiReturnQuery;
+      if (multi.optional) return null;
+      for (const p of multi.patterns) {
+        if (p.labels && p.labels.length > 1) return null;
+      }
+      const vars = multi.patterns.map(p => p.variable);
+      function checkExpr(expr: Expression): boolean {
+        switch (expr.type) {
+          case 'Variable':
+            return vars.includes(expr.name);
+          case 'Property':
+          case 'Id':
+          case 'Labels':
+            return vars.includes(expr.variable);
+          case 'Literal':
+          case 'Parameter':
+            return true;
+          case 'Add':
+          case 'Sub':
+          case 'Mul':
+          case 'Div':
+            return checkExpr(expr.left) && checkExpr(expr.right);
+          case 'Neg':
+            return checkExpr(expr.expression);
+          case 'Count':
+          case 'Sum':
+          case 'Min':
+          case 'Max':
+          case 'Avg':
+          case 'Collect':
+            return expr.expression ? checkExpr(expr.expression) : true;
+          case 'All':
+            return multi.returnItems.length === 1;
+          default:
+            return false;
+        }
+      }
+
+      for (const ri of multi.returnItems) {
+        if (!checkExpr(ri.expression)) return null;
+      }
+
+      const self = this;
+      async function fetch(p: typeof multi.patterns[number]): Promise<NodeRecord[]> {
+        let sql = 'SELECT id, labels, properties FROM nodes';
+        const paramsArr: any[] = [];
+        const conds: string[] = [];
+        if (p.labels && p.labels.length === 1) {
+          conds.push('labels LIKE ?');
+          paramsArr.push(`%"${p.labels[0]}"%`);
+        }
+        if (p.properties) {
+          for (const [k, v] of Object.entries(p.properties)) {
+            const val =
+              v && typeof v === 'object' && 'type' in v
+                ? v.type === 'Literal'
+                  ? (v as any).value
+                  : v.type === 'Parameter'
+                  ? params[(v as any).name]
+                  : undefined
+                : v;
+            if (val === null) {
+              conds.push(`json_extract(properties, '$.${k}') IS NULL`);
+            } else {
+              conds.push(`json_extract(properties, '$.${k}') = ?`);
+              paramsArr.push(val);
+            }
+          }
+        }
+        if (conds.length > 0) sql += ' WHERE ' + conds.join(' AND ');
+        await self.ensureReady();
+        const stmt = self.db.prepare(sql);
+        stmt.bind(paramsArr);
+        const res: NodeRecord[] = [];
+        while (stmt.step()) res.push(self.rowToNode(stmt.getAsObject()));
+        stmt.free();
+        return res;
+      }
+
+      function evalWhere(where: any, map: Map<string, any>): boolean {
+        if (!where) return true;
+        if (where.type === 'Condition') {
+          const left = self.evalExpr(where.left, map, params);
+          const right = where.right ? self.evalExpr(where.right, map, params) : undefined;
+          switch (where.operator) {
+            case '=':
+              return left === right;
+            case '<>':
+              return left !== right;
+            case '>':
+              return left > right;
+            case '>=':
+              return left >= right;
+            case '<':
+              return left < right;
+            case '<=':
+              return left <= right;
+            case 'IN':
+              return Array.isArray(right) && right.includes(left);
+            case 'IS NULL':
+              return left === null || left === undefined;
+            case 'IS NOT NULL':
+              return left !== null && left !== undefined;
+            case 'STARTS WITH':
+              return typeof left === 'string' && typeof right === 'string' && left.startsWith(right);
+            case 'ENDS WITH':
+              return typeof left === 'string' && typeof right === 'string' && left.endsWith(right);
+            case 'CONTAINS':
+              return typeof left === 'string' && typeof right === 'string' && left.includes(right);
+            default:
+              return false;
+          }
+        }
+        if (where.type === 'And') return evalWhere(where.left, map) && evalWhere(where.right, map);
+        if (where.type === 'Or') return evalWhere(where.left, map) || evalWhere(where.right, map);
+        if (where.type === 'Not') return !evalWhere(where.clause, map);
+        return false;
+      }
+
+      async function* genMulti() {
+        const sets = await Promise.all(multi.patterns.map(p => fetch(p)));
+
+        const hasAggItem = multi.returnItems.map(r => self.hasAgg(r.expression));
+        const hasAgg = hasAggItem.some(v => v);
+        const aliasFor = (ri: typeof multi.returnItems[number], idx: number): string => {
+          if (ri.alias) return ri.alias;
+          if (ri.expression.type === 'Variable') return ri.expression.name;
+          return multi.returnItems.length === 1 ? 'value' : `value${idx}`;
+        };
+
+        const rows: { row: Record<string, any>; order?: any[] }[] = [];
+
+        const traverse = (idx: number, varsMap: Map<string, any>) => {
+          if (idx >= sets.length) {
+            if (!evalWhere(multi.where, varsMap)) return;
+            if (hasAgg) {
+              // treat like single pattern but with synthetic group key
+              const keyParts: any[] = [];
+              for (let i = 0; i < multi.returnItems.length; i++) {
+                if (!hasAggItem[i]) keyParts.push(self.evalExpr(multi.returnItems[i].expression, varsMap, params));
+              }
+              const key = JSON.stringify(keyParts);
+              let group = (groupMap as any).get(key);
+              if (!group) {
+                const row: Record<string, any> = {};
+                let j = 0;
+                multi.returnItems.forEach((item, idx2) => {
+                  if (!hasAggItem[idx2]) {
+                    row[aliasFor(item, idx2)] = keyParts[j++];
+                  }
+                });
+                group = { row, aggs: [], vars: new Map<string, any>(varsMap) };
+                (groupMap as any).set(key, group);
+              }
+              multi.returnItems.forEach((item, idx2) => {
+                if (!hasAggItem[idx2]) return;
+                const cur = (group.aggs[idx2] = group.aggs[idx2] ?? self.initAggState(item.expression));
+                self.updateAggState(item.expression, cur, varsMap, params);
+              });
+            } else {
+              const row: Record<string, any> = {};
+              const aliasVars = new Map<string, any>(varsMap);
+              multi.returnItems.forEach((item, idx2) => {
+                const alias = aliasFor(item, idx2);
+                if (item.expression.type === 'All') {
+                  for (const [k, v] of varsMap.entries()) {
+                    row[k] = v;
+                    aliasVars.set(k, v);
+                  }
+                } else {
+                  const val = self.evalExpr(item.expression, varsMap, params);
+                  row[alias] = val;
+                  if (item.alias) aliasVars.set(item.alias, val);
+                }
+              });
+              const order = multi.orderBy ? multi.orderBy.map(o => self.evalExpr(o.expression, aliasVars, params)) : undefined;
+              rows.push({ row, order });
+            }
+            return;
+          }
+          for (const node of sets[idx]) {
+            varsMap.set(multi.patterns[idx].variable, node);
+            traverse(idx + 1, varsMap);
+          }
+        };
+
+        const groupMap = new Map<string, any>();
+        traverse(0, new Map<string, any>());
+
+        if (hasAgg) {
+          if (groupMap.size === 0 && hasAggItem.every(v => v)) {
+            groupMap.set('__empty__', { row: {}, aggs: [], vars: new Map<string, any>() });
+          }
+          for (const group of groupMap.values()) {
+            const aliasVars = new Map<string, any>(group.vars);
+            multi.returnItems.forEach((it, i) => {
+              const alias = aliasFor(it, i);
+              aliasVars.set(alias, group.row[alias]);
+              if (it.alias) aliasVars.set(it.alias, group.row[alias]);
+            });
+            multi.returnItems.forEach((item, idx2) => {
+              if (!hasAggItem[idx2]) return;
+              group.row[aliasFor(item, idx2)] = self.finalizeAgg(item.expression, group.aggs[idx2], aliasVars, params);
+            });
+            let order: any[] | undefined;
+            if (multi.orderBy) {
+              order = multi.orderBy.map(o => self.evalExpr(o.expression, aliasVars, params));
+            }
+            rows.push({ row: group.row, order });
+          }
+        }
+
+        if (multi.distinct) {
+          const seen = new Set<string>();
+          const uniq: typeof rows = [];
+          for (const r of rows) {
+            const key = JSON.stringify(r.row);
+            if (!seen.has(key)) {
+              seen.add(key);
+              uniq.push(r);
+            }
+          }
+          rows.splice(0, rows.length, ...uniq);
+        }
+
+        if (multi.orderBy && multi.orderBy.length > 0) {
+          rows.sort((a, b) => {
+            for (let i = 0; i < multi.orderBy!.length; i++) {
+              const av = a.order ? a.order[i] : undefined;
+              const bv = b.order ? b.order[i] : undefined;
+              if (av === bv) continue;
+              if (av === undefined) return 1;
+              if (bv === undefined) return -1;
+              let cmp = av > bv ? 1 : -1;
+              if (multi.orderBy![i].direction === 'DESC') cmp = -cmp;
+              return cmp;
+            }
+            return 0;
+          });
+        }
+
+        let startIdx = 0;
+        if (multi.skip) {
+          const v = self.evalExpr(multi.skip, new Map(), params);
+          if (typeof v === 'number') startIdx = v;
+        }
+        let endIdx = rows.length;
+        if (multi.limit !== undefined) {
+          const v = self.evalExpr(multi.limit, new Map(), params);
+          if (typeof v === 'number') endIdx = Math.min(endIdx, startIdx + v);
+        }
+        for (let i = startIdx; i < endIdx; i++) {
+          yield rows[i].row;
+        }
+      }
+      return genMulti();
+    }
+    return null;
   }
 }
