@@ -601,7 +601,7 @@ export class SqlJsAdapter implements StorageAdapter {
       (retExpr.type === 'Id' && retExpr.variable === matchAst.variable) ||
       (retExpr.type === 'Labels' && retExpr.variable === matchAst.variable) ||
       retExpr.type === 'All';
-    if (!isCount && !isAgg && (matchAst.optional || !isSimpleReturn)) return null;
+    if (!isCount && !isAgg && !isSimpleReturn) return null;
 
     let sql = 'SELECT ';
     if (isCount) {
@@ -842,7 +842,9 @@ export class SqlJsAdapter implements StorageAdapter {
       await self.ensureReady();
       const stmt = self.db.prepare(transpiled.sql);
       stmt.bind(transpiled.params);
+      let yielded = false;
       while (stmt.step()) {
+        yielded = true;
         const row = stmt.getAsObject();
         const out: Record<string, unknown> = {};
         for (const item of matchAst.returnItems) {
@@ -875,6 +877,19 @@ export class SqlJsAdapter implements StorageAdapter {
         yield out;
       }
       stmt.free();
+      if (!yielded && matchAst.optional) {
+        const out: Record<string, unknown> = {};
+        for (const item of matchAst.returnItems) {
+          let alias: string;
+          if (item.alias) alias = item.alias;
+          else if (allowMulti) alias = (item.expression as any).property;
+          else if (item.expression.type === 'Variable') alias = item.expression.name;
+          else if (item.expression.type === 'All') alias = matchAst.variable;
+          else alias = 'value';
+          out[alias] = undefined;
+        }
+        yield out;
+      }
     }
     return gen();
   }

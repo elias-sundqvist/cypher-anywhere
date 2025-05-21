@@ -831,6 +831,7 @@ runOnAdapters('relationships() on path returns relationships', async engine => {
 
 runOnAdapters('OPTIONAL MATCH missing returns null row', async (engine, adapter) => {
   const result = engine.run('OPTIONAL MATCH (n:Missing) RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
@@ -840,6 +841,7 @@ runOnAdapters('OPTIONAL MATCH missing returns null row', async (engine, adapter)
 runOnAdapters('OPTIONAL MATCH existing node returns it', async (engine, adapter) => {
   const q = 'OPTIONAL MATCH (n:Person {name:"Alice"}) RETURN n';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);

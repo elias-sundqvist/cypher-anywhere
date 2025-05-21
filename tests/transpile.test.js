@@ -49,6 +49,27 @@ test('transpile match by property only', () => {
   assert.deepStrictEqual(result.params, ['Alice']);
 });
 
+test('transpile optional match simple return', () => {
+  const result = adapter.transpile('OPTIONAL MATCH (n:Person {name:"Alice"}) RETURN n');
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.name\') = ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice']);
+});
+
+test('transpile optional match property return', () => {
+  const q = 'OPTIONAL MATCH (n:Person {name:"Alice"}) RETURN n.name AS name';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT json_extract(properties, \'$.name\') AS name FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.name\') = ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice']);
+});
+
 test('transpile match with alias', () => {
   const result = adapter.transpile('MATCH (n:Person) RETURN n AS person');
   assert.ok(result);
