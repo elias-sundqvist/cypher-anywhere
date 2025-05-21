@@ -874,6 +874,15 @@ runOnAdapters('ORDER BY DESC', async (engine, adapter) => {
   assert.deepStrictEqual(out, [2014, 1999]);
 });
 
+runOnAdapters('ORDER BY id function', async (engine, adapter) => {
+  const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY id(n) DESC';
+  const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  const out = [];
+  for await (const row of result) out.push(row.name);
+  assert.deepStrictEqual(out, ['Carol', 'Bob', 'Alice']);
+});
+
 runOnAdapters('ORDER BY multiple expressions', async (engine, adapter) => {
   for await (const _ of engine.run('CREATE (m:Movie {title:"Extra", released:2014})')) {}
   const q =

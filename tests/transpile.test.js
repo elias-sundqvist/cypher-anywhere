@@ -527,3 +527,47 @@ test('transpile multiple return properties', () => {
   );
   assert.deepStrictEqual(result.params, ['%"Movie"%']);
 });
+
+test('transpile ORDER BY id function', () => {
+  const q = 'MATCH (n:Person) RETURN n ORDER BY id(n) DESC';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? ORDER BY id DESC'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile ORDER BY variable', () => {
+  const q = 'MATCH (n:Person) RETURN n ORDER BY n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? ORDER BY id'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile ORDER BY return alias', () => {
+  const q = 'MATCH (n:Person) RETURN n.name AS nm ORDER BY nm';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT json_extract(properties, '$.name') AS nm FROM nodes WHERE labels LIKE ? ORDER BY json_extract(properties, '$.name')"
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile parameterized LIMIT', () => {
+  const q = 'MATCH (n:Person) RETURN n LIMIT $lim';
+  const result = adapter.transpile(q, { lim: 2 });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? LIMIT 2'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
