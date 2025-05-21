@@ -347,6 +347,27 @@ test('transpile with negative comparison', () => {
   assert.deepStrictEqual(result.params, ['%"Person"%', -5]);
 });
 
+test('transpile COUNT nodes', () => {
+  const result = adapter.transpile('MATCH (n:Person) RETURN COUNT(n)');
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT COUNT(*) AS value FROM nodes WHERE labels LIKE ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile COUNT with WHERE clause', () => {
+  const q = 'MATCH (n:Person) WHERE n.age > 30 RETURN COUNT(n) AS cnt';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT COUNT(*) AS value FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.age\') > ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 30]);
+});
+
 test('transpile returns null for ORDER BY', () => {
   const q = 'MATCH (n:Person) RETURN n ORDER BY n.name';
   const result = adapter.transpile(q);
