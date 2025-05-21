@@ -1115,45 +1115,61 @@ runOnAdapters('MIN on empty result returns null', async (engine, adapter) => {
   }
 });
 
-runOnAdapters('UNION combines results', async engine => {
+runOnAdapters('UNION combines results', async (engine, adapter) => {
   const q =
     'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name ' +
     'UNION ' +
     'MATCH (p:Person {name:"Bob"}) RETURN p.name AS name';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.name);
+  for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out.sort(), ['Alice', 'Bob']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('UNION removes duplicate rows', async engine => {
+runOnAdapters('UNION removes duplicate rows', async (engine, adapter) => {
   const q =
     'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name ' +
     'UNION ' +
     'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.name);
+  for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Alice']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('UNION ALL preserves duplicate rows', async engine => {
+runOnAdapters('UNION ALL preserves duplicate rows', async (engine, adapter) => {
   const q =
     'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name ' +
     'UNION ALL ' +
     'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.name);
+  for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Alice', 'Alice']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('UNION with ORDER BY SKIP LIMIT', async engine => {
+runOnAdapters('UNION with ORDER BY SKIP LIMIT', async (engine, adapter) => {
   const q =
     'MATCH (p:Person {name:"Alice"}) RETURN p.name AS name ' +
     'UNION ' +
     'MATCH (p:Person {name:"Bob"}) RETURN p.name AS name ' +
     'ORDER BY name DESC SKIP 1 LIMIT 1';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.name);
+  for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out, ['Alice']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('RETURN DISTINCT removes duplicates', async engine => {
@@ -1174,34 +1190,48 @@ runOnAdapters('RETURN DISTINCT node property', async (engine, adapter) => {
   }
 });
 
-runOnAdapters('CALL subquery returns rows', async engine => {
+runOnAdapters('CALL subquery returns rows', async (engine, adapter) => {
   const q = 'CALL { MATCH (p:Person {name:"Alice"}) RETURN p } RETURN p';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.p);
+  for await (const row of result) out.push(row.p);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('CALL subquery propagates alias', async engine => {
+runOnAdapters('CALL subquery propagates alias', async (engine, adapter) => {
   const q = 'CALL { MATCH (p:Person) RETURN p.name AS name } RETURN name';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.name);
+  for await (const row of result) out.push(row.name);
   assert.deepStrictEqual(out.sort(), ['Alice', 'Bob', 'Carol']);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('CALL with ORDER BY applies ordering', async engine => {
+runOnAdapters('CALL with ORDER BY applies ordering', async (engine, adapter) => {
   const q = 'CALL { RETURN 2 AS x UNION ALL RETURN 1 AS x } RETURN x ORDER BY x';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.x);
+  for await (const row of result) out.push(row.x);
   assert.deepStrictEqual(out, [1, 2]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('CALL with ORDER BY SKIP LIMIT', async engine => {
+runOnAdapters('CALL with ORDER BY SKIP LIMIT', async (engine, adapter) => {
   const q =
     'CALL { UNWIND [1,2,3] AS x RETURN x } RETURN x ORDER BY x DESC SKIP 1 LIMIT 1';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.x);
+  for await (const row of result) out.push(row.x);
   assert.deepStrictEqual(out, [2]);
+  // UNWIND is not yet transpiled
 });
 
 runOnAdapters('single hop match without rel variable', async engine => {

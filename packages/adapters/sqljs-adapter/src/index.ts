@@ -8,7 +8,11 @@ import {
   parseMany,
   MatchReturnQuery,
   MatchMultiReturnQuery,
-  Expression
+  ReturnQuery,
+  Expression,
+  CypherAST,
+  UnionQuery,
+  CallQuery
 } from '@cypher-anywhere/core';
 import type * as fsType from 'fs';
 import initSqlJs, { Database } from 'sql.js';
@@ -321,6 +325,12 @@ export class SqlJsAdapter implements StorageAdapter {
         const rec = vars.get(expr.variable) as NodeRecord | RelRecord | undefined;
         return rec ? rec.id : undefined;
       }
+      case 'Length': {
+        const v = this.evalExpr(expr.expression, vars, params);
+        if (v == null) return null;
+        if (Array.isArray(v) || typeof v === 'string') return v.length;
+        return undefined;
+      }
       case 'All':
         return Object.fromEntries(vars.entries());
       default:
@@ -530,13 +540,10 @@ export class SqlJsAdapter implements StorageAdapter {
 
   supportsTranspilation = true;
 
-  runTranspiled(
-    cypher: string,
+  private runTranspiledAST(
+    ast: CypherAST,
     params: Record<string, any>
   ): AsyncIterable<Record<string, unknown>> | null {
-    const asts = parseMany(cypher);
-    if (asts.length !== 1) return null;
-    const ast = asts[0];
     if (ast.type === 'MatchReturn') {
       const matchAst = ast as MatchReturnQuery;
     if (
@@ -1142,6 +1149,244 @@ export class SqlJsAdapter implements StorageAdapter {
       }
       return genMulti();
     }
+
+    if (ast.type === 'Return') {
+      const ret = ast as ReturnQuery;
+      const aliasFor = (item: typeof ret.returnItems[number], idx: number): string => {
+        if (item.alias) return item.alias;
+        if (item.expression.type === 'Variable') return item.expression.name;
+        return ret.returnItems.length === 1 ? 'value' : `value${idx}`;
+      };
+      const self = this;
+      async function* genReturn() {
+        const row: Record<string, any> = {};
+        const aliasVars = new Map<string, any>();
+        ret.returnItems.forEach((item, idx) => {
+          if (item.expression.type === 'All') {
+            // nothing in vars map
+          } else {
+            const val = self.evalExpr(item.expression, new Map(), params);
+            const alias = aliasFor(item, idx);
+            row[alias] = val;
+            if (item.alias) aliasVars.set(item.alias, val);
+          }
+        });
+        let include = true;
+        let start = 0;
+        if (ret.skip) start = Number(self.evalExpr(ret.skip, new Map(), params));
+        let limit = ret.limit ? Number(self.evalExpr(ret.limit, new Map(), params)) : undefined;
+        if (start > 0) include = false;
+        if (include) {
+          if (limit === undefined || limit > 0) {
+            yield row;
+          }
+        }
+      }
+      return genReturn();
+    }
+
+    if (ast.type === 'Union') {
+      const u = ast as UnionQuery;
+      const leftIter = this.runTranspiledAST(u.left, params);
+      const rightIter = this.runTranspiledAST(u.right, params);
+      if (!leftIter || !rightIter) return null;
+      const self = this;
+      async function* genUnion() {
+        const rows: Record<string, any>[] = [];
+        const seen = new Set<string>();
+        for await (const r of leftIter!) {
+          if (u.all) {
+            rows.push(r);
+          } else {
+            const k = JSON.stringify(r);
+            if (!seen.has(k)) {
+              seen.add(k);
+              rows.push(r);
+            }
+          }
+        }
+        for await (const r of rightIter!) {
+          if (u.all) {
+            rows.push(r);
+          } else {
+            const k = JSON.stringify(r);
+            if (!seen.has(k)) {
+              seen.add(k);
+              rows.push(r);
+            }
+          }
+        }
+        if (u.orderBy) {
+          rows.sort((a, b) => {
+            for (let i = 0; i < u.orderBy!.length; i++) {
+              const ob = u.orderBy![i];
+              const av = self.evalExpr(ob.expression, new Map(Object.entries(a)), params);
+              const bv = self.evalExpr(ob.expression, new Map(Object.entries(b)), params);
+              if (av === bv) continue;
+              if (av === undefined) return 1;
+              if (bv === undefined) return -1;
+              let cmp = av > bv ? 1 : -1;
+              if (ob.direction === 'DESC') cmp = -cmp;
+              return cmp;
+            }
+            return 0;
+          });
+        }
+        let start = 0;
+        if (u.skip) start = Number(self.evalExpr(u.skip, new Map(), params));
+        let end = rows.length;
+        if (u.limit !== undefined) {
+          end = Math.min(end, start + Number(self.evalExpr(u.limit, new Map(), params)));
+        }
+        for (let i = start; i < end; i++) {
+          yield rows[i];
+        }
+      }
+      return genUnion();
+    }
     return null;
+  }
+
+  runTranspiled(
+    cypher: string,
+    params: Record<string, any>
+  ): AsyncIterable<Record<string, unknown>> | null {
+    const asts = parseMany(cypher);
+    if (asts.length !== 1) return null;
+    const ast = asts[0];
+    if (ast.type === 'Union') {
+      const leftIter = this.runTranspiledAST((ast as UnionQuery).left, params);
+      const rightIter = this.runTranspiledAST((ast as UnionQuery).right, params);
+      if (!leftIter || !rightIter) return null;
+      const self = this;
+      async function* gen() {
+        const rows: Record<string, any>[] = [];
+        const seen = new Set<string>();
+        for await (const r of leftIter!) {
+          if ((ast as UnionQuery).all) {
+            rows.push(r);
+          } else {
+            const k = JSON.stringify(r);
+            if (!seen.has(k)) {
+              seen.add(k);
+              rows.push(r);
+            }
+          }
+        }
+        for await (const r of rightIter!) {
+          if ((ast as UnionQuery).all) {
+            rows.push(r);
+          } else {
+            const k = JSON.stringify(r);
+            if (!seen.has(k)) {
+              seen.add(k);
+              rows.push(r);
+            }
+          }
+        }
+        if ((ast as UnionQuery).orderBy) {
+          rows.sort((a, b) => {
+            for (let i = 0; i < (ast as UnionQuery).orderBy!.length; i++) {
+              const ao = (ast as UnionQuery).orderBy![i];
+              const av = self.evalExpr(ao.expression, new Map(Object.entries(a)), params);
+              const bv = self.evalExpr(ao.expression, new Map(Object.entries(b)), params);
+              if (av === bv) continue;
+              if (av === undefined) return 1;
+              if (bv === undefined) return -1;
+              let cmp = av > bv ? 1 : -1;
+              if (ao.direction === 'DESC') cmp = -cmp;
+              return cmp;
+            }
+            return 0;
+          });
+        }
+        let start = 0;
+        if ((ast as UnionQuery).skip)
+          start = Number(self.evalExpr((ast as UnionQuery).skip!, new Map(), params));
+        let end = rows.length;
+        if ((ast as UnionQuery).limit !== undefined) {
+          end = Math.min(
+            end,
+            start + Number(self.evalExpr((ast as UnionQuery).limit!, new Map(), params))
+          );
+        }
+        for (let i = start; i < end; i++) {
+          yield rows[i];
+        }
+      }
+      return gen();
+    }
+    if (ast.type === 'Call') {
+      const call = ast as CallQuery;
+      const subsIters = call.subquery.map(q => this.runTranspiledAST(q, params));
+      if (subsIters.some(s => !s)) return null;
+      const self = this;
+      async function* genCall() {
+        const local = new Map<string, any>();
+        const outRows: Record<string, any>[] = [];
+        for (let i = 0; i < subsIters.length; i++) {
+          const it = subsIters[i]!;
+          for await (const row of it) {
+            if (i === subsIters.length - 1) {
+              const varsWithRow = new Map(local);
+              for (const [k, v] of Object.entries(row)) varsWithRow.set(k, v);
+              const out: Record<string, any> = {};
+              call.returnItems.forEach((item, idx) => {
+                const alias =
+                  item.alias ||
+                  (item.expression.type === 'Variable'
+                    ? item.expression.name
+                    : call.returnItems.length === 1
+                    ? 'value'
+                    : `value${idx}`);
+                out[alias] = self.evalExpr(item.expression, varsWithRow, params);
+              });
+              outRows.push(out);
+            } else {
+              for (const [k, v] of Object.entries(row)) local.set(k, v);
+            }
+          }
+        }
+        let rowsToYield = outRows;
+        if (call.distinct) {
+          const seen = new Set<string>();
+          rowsToYield = [];
+          for (const r of outRows) {
+            const key = JSON.stringify(r);
+            if (!seen.has(key)) {
+              seen.add(key);
+              rowsToYield.push(r);
+            }
+          }
+        }
+        if (call.orderBy) {
+          rowsToYield.sort((a, b) => {
+            for (let i = 0; i < call.orderBy!.length; i++) {
+              const ob = call.orderBy![i];
+              const av = self.evalExpr(ob.expression, new Map(Object.entries(a)), params);
+              const bv = self.evalExpr(ob.expression, new Map(Object.entries(b)), params);
+              if (av === bv) continue;
+              if (av === undefined) return 1;
+              if (bv === undefined) return -1;
+              let cmp = av > bv ? 1 : -1;
+              if (ob.direction === 'DESC') cmp = -cmp;
+              return cmp;
+            }
+            return 0;
+          });
+        }
+        let start = 0;
+        if (call.skip) start = Number(self.evalExpr(call.skip, new Map(), params));
+        let end = rowsToYield.length;
+        if (call.limit !== undefined) {
+          end = Math.min(end, start + Number(self.evalExpr(call.limit, new Map(), params)));
+        }
+        for (let i = start; i < end; i++) {
+          yield rowsToYield[i];
+        }
+      }
+      return genCall();
+    }
+    return this.runTranspiledAST(ast, params);
   }
 }
