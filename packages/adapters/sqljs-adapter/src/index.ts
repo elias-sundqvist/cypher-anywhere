@@ -273,18 +273,37 @@ export class SqlJsAdapter implements StorageAdapter {
         if (expr.name !== matchAst.variable) return null;
       } else if (expr.type === 'Property') {
         if (expr.variable !== matchAst.variable) return null;
+      } else if (expr.type === 'Id' || expr.type === 'Labels') {
+        if (expr.variable !== matchAst.variable) return null;
+      } else if (expr.type === 'All') {
+        if (matchAst.returnItems.length !== 1) return null;
       } else {
         return null;
       }
     }
     const aliasMap = new Map<string, any>();
-    for (const ri of matchAst.returnItems) {
-      const name =
-        ri.alias ||
-        (ri.expression.type === 'Variable'
-          ? ri.expression.name
-          : (ri.expression as any).property);
-      aliasMap.set(name, ri.expression);
+    if (
+      matchAst.returnItems.length === 1 &&
+      matchAst.returnItems[0].expression.type === 'All'
+    ) {
+      const name = matchAst.returnItems[0].alias || matchAst.variable;
+      aliasMap.set(name, { type: 'Variable', name: matchAst.variable });
+    } else {
+      for (const ri of matchAst.returnItems) {
+        const expr = ri.expression as any;
+        const name =
+          ri.alias ||
+          (expr.type === 'Variable'
+            ? expr.name
+            : expr.type === 'Property'
+            ? expr.property
+            : expr.type === 'Id'
+            ? 'id'
+            : expr.type === 'Labels'
+            ? 'labels'
+            : 'val');
+        aliasMap.set(name, ri.expression);
+      }
     }
 
     let sql = 'SELECT id, labels, properties FROM nodes';
@@ -415,6 +434,10 @@ export class SqlJsAdapter implements StorageAdapter {
             data[name] = node;
           } else if (expr.type === 'Property') {
             data[name] = node.properties[expr.property];
+          } else if (expr.type === 'Id') {
+            data[name] = node.id;
+          } else if (expr.type === 'Labels') {
+            data[name] = node.labels;
           }
         }
         rows.push({ node, data });
@@ -436,6 +459,12 @@ export class SqlJsAdapter implements StorageAdapter {
             } else if (expr.type === 'Property') {
               aval = a.node.properties[expr.property];
               bval = b.node.properties[expr.property];
+            } else if (expr.type === 'Id') {
+              aval = a.node.id;
+              bval = b.node.id;
+            } else if (expr.type === 'Labels') {
+              aval = a.node.labels.join(',');
+              bval = b.node.labels.join(',');
             } else {
               aval = undefined;
               bval = undefined;

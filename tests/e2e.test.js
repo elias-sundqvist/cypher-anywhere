@@ -1247,12 +1247,16 @@ runOnAdapters('unary minus on expression', async engine => {
   for await (const row of engine.run(q)) out.push(row.val);
   assert.deepStrictEqual(out, [-3]);
 });
-runOnAdapters('RETURN star returns all variables', async engine => {
+runOnAdapters('RETURN star returns all variables', async (engine, adapter) => {
+  const result = engine.run('MATCH (n:Person {name:"Alice"}) RETURN *');
   const out = [];
-  for await (const row of engine.run('MATCH (n:Person {name:"Alice"}) RETURN *')) out.push(row);
+  for await (const row of result) out.push(row);
   assert.strictEqual(out.length, 1);
   assert.ok(out[0].n);
   assert.strictEqual(out[0].n.properties.name, 'Alice');
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('RETURN star with relationship chain', async engine => {
@@ -1265,11 +1269,14 @@ runOnAdapters('RETURN star with relationship chain', async engine => {
   assert.strictEqual(out[0].m.properties.title, 'John Wick');
   assert.strictEqual(out[0].r.type, 'ACTED_IN');
 });
-runOnAdapters('id() function returns node id', async engine => {
+runOnAdapters('id() function returns node id', async (engine, adapter) => {
+  const result = engine.run('MATCH (n:Person {name:"Alice"}) RETURN id(n) AS id');
   const out = [];
-  for await (const row of engine.run('MATCH (n:Person {name:"Alice"}) RETURN id(n) AS id'))
-    out.push(row.id);
+  for await (const row of result) out.push(row.id);
   assert.deepStrictEqual(out, [1]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('id() on relationship returns rel id', async engine => {
@@ -1286,11 +1293,15 @@ runOnAdapters('type() on relationship returns rel type', async engine => {
   assert.deepStrictEqual(out, ['ACTED_IN']);
 });
 
-runOnAdapters('labels() function returns node labels', async engine => {
+runOnAdapters('labels() function returns node labels', async (engine, adapter) => {
   const q = 'MATCH (n:Person {name:"Carol"}) RETURN labels(n) AS labs';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.labs);
+  for await (const row of result) out.push(row.labs);
   assert.deepStrictEqual(out, [['Person', 'Actor']]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('WITH alias named id allowed', async engine => {
