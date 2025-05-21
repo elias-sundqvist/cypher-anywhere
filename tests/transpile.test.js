@@ -472,3 +472,59 @@ test('transpile RETURN node with LIMIT', () => {
   );
   assert.deepStrictEqual(result.params, ['%"Person"%']);
 });
+
+test('transpile parameterized LIMIT', () => {
+  const q = 'MATCH (n:Person) RETURN n LIMIT $lim';
+  const result = adapter.transpile(q, { lim: 2 });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? LIMIT 2'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile SKIP without LIMIT', () => {
+  const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY name SKIP 1';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT json_extract(properties, '$.name') AS value FROM nodes WHERE labels LIKE ? ORDER BY json_extract(properties, '$.name') LIMIT -1 OFFSET 1"
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile ORDER BY alias', () => {
+  const q = 'MATCH (n:Person) RETURN n.name AS nm ORDER BY nm DESC LIMIT 2';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT json_extract(properties, '$.name') AS value FROM nodes WHERE labels LIKE ? ORDER BY json_extract(properties, '$.name') DESC LIMIT 2"
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile ORDER BY variable ascending', () => {
+  const q = 'MATCH (n:Person) RETURN n ORDER BY n.name';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT id, labels, properties FROM nodes WHERE labels LIKE ? ORDER BY json_extract(properties, '$.name')"
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile parameterized id IN list', () => {
+  const q = 'MATCH (n) WHERE id(n) IN $ids RETURN n';
+  const result = adapter.transpile(q, { ids: [1, 2] });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE id IN (?, ?)'
+  );
+  assert.deepStrictEqual(result.params, [1, 2]);
+});
+

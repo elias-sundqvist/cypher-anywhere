@@ -1489,3 +1489,22 @@ runOnAdapters('size() on path returns hop count', async (engine, adapter) => {
   for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [1]);
 });
+
+runOnAdapters('ORDER BY alias with LIMIT', async (engine, adapter) => {
+  const q = 'MATCH (n:Person) RETURN n.name AS nm ORDER BY nm DESC LIMIT 2';
+  const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  const out = [];
+  for await (const row of result) out.push(row.nm);
+  assert.deepStrictEqual(out, ['Carol', 'Bob']);
+});
+
+runOnAdapters('SKIP without LIMIT', async (engine, adapter) => {
+  const q = 'MATCH (n:Person) RETURN n.name AS name ORDER BY name SKIP 1';
+  const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
+  const out = [];
+  for await (const row of result) out.push(row.name);
+  assert.deepStrictEqual(out, ['Bob', 'Carol']);
+});
+
