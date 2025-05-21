@@ -248,6 +248,50 @@ test('transpile with WHERE not equals', () => {
   assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice']);
 });
 
+test('transpile with parameterized WHERE not equals', () => {
+  const q = 'MATCH (n:Person) WHERE n.name <> $name RETURN n';
+  const result = adapter.transpile(q, { name: 'Alice' });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, '$.name') <> ?"
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice']);
+});
+
+test('transpile WHERE id greater than', () => {
+  const q = 'MATCH (n) WHERE id(n) > 1 RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE id > ?'
+  );
+  assert.deepStrictEqual(result.params, [1]);
+});
+
+test('transpile WHERE id greater or equal parameter', () => {
+  const q = 'MATCH (n:Person) WHERE id(n) >= $id RETURN n';
+  const result = adapter.transpile(q, { id: 2 });
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND id >= ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 2]);
+});
+
+test('transpile WHERE boolean property', () => {
+  const q = 'MATCH (n:Flagged) WHERE n.active = true RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, '$.active') = ?"
+  );
+  assert.deepStrictEqual(result.params, ['%"Flagged"%', true]);
+});
+
 test('transpile IN empty list yields constant false', () => {
   const q = 'MATCH (n:Person) WHERE n.name IN [] RETURN n';
   const result = adapter.transpile(q);
