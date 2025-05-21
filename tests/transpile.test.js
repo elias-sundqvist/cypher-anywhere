@@ -429,3 +429,47 @@ test('transpile WHERE id equality parameter', () => {
   );
   assert.deepStrictEqual(result.params, [3]);
 });
+
+test('transpile SUM aggregation', () => {
+  const q = 'MATCH (m:Movie) RETURN SUM(m.released)';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT SUM(json_extract(properties, '$.released')) AS value FROM nodes WHERE labels LIKE ?"
+  );
+  assert.deepStrictEqual(result.params, ['%"Movie"%']);
+});
+
+test('transpile MIN aggregation', () => {
+  const q = 'MATCH (m:Movie) RETURN MIN(m.released)';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT MIN(json_extract(properties, '$.released')) AS value FROM nodes WHERE labels LIKE ?"
+  );
+  assert.deepStrictEqual(result.params, ['%"Movie"%']);
+});
+
+test('transpile MAX aggregation', () => {
+  const q = 'MATCH (m:Movie) RETURN MAX(m.released)';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT MAX(json_extract(properties, '$.released')) AS value FROM nodes WHERE labels LIKE ?"
+  );
+  assert.deepStrictEqual(result.params, ['%"Movie"%']);
+});
+
+test('transpile AVG aggregation', () => {
+  const q = 'MATCH (m:Movie) RETURN AVG(m.released)';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    "SELECT AVG(json_extract(properties, '$.released')) AS value FROM nodes WHERE labels LIKE ?"
+  );
+  assert.deepStrictEqual(result.params, ['%"Movie"%']);
+});

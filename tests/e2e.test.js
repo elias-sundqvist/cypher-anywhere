@@ -1001,6 +1001,7 @@ runOnAdapters('COUNT DISTINCT star counts rows', async (engine, adapter) => {
 
 runOnAdapters('SUM aggregation', async (engine, adapter) => {
   const result = engine.run('MATCH (m:Movie) RETURN SUM(m.released)');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.value);
   assert.strictEqual(out[0], 1999 + 2014);
@@ -1053,6 +1054,7 @@ runOnAdapters('COLLECT aggregation returns list', async (engine, adapter) => {
 runOnAdapters('MIN aggregation', async (engine, adapter) => {
   const q = 'MATCH (m:Movie) RETURN MIN(m.released) AS year';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.year);
   assert.deepStrictEqual(out, [1999]);
@@ -1061,6 +1063,7 @@ runOnAdapters('MIN aggregation', async (engine, adapter) => {
 runOnAdapters('MAX aggregation', async (engine, adapter) => {
   const q = 'MATCH (m:Movie) RETURN MAX(m.released) AS year';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.year);
   assert.deepStrictEqual(out, [2014]);
@@ -1069,6 +1072,7 @@ runOnAdapters('MAX aggregation', async (engine, adapter) => {
 runOnAdapters('MIN on empty result returns null', async (engine, adapter) => {
   const q = 'MATCH (n:Missing) RETURN MIN(n.x) AS val';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.val);
   assert.deepStrictEqual(out, [null]);

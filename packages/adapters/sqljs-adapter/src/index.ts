@@ -584,18 +584,36 @@ export class SqlJsAdapter implements StorageAdapter {
 
     const retExpr = matchAst.returnItems[0].expression;
     const isCount = retExpr.type === 'Count';
-    if (isCount && (retExpr as any).distinct) return null;
-    if (
-      !isCount &&
-      (matchAst.optional ||
+    const aggMap: Record<string, string> = {
+      Sum: 'SUM',
+      Min: 'MIN',
+      Max: 'MAX',
+      Avg: 'AVG'
+    };
+    const isAgg = retExpr.type in aggMap;
+    if ((isCount || isAgg) && (retExpr as any).distinct) return null;
+    if (!isCount && !isAgg) {
+      if (
+        matchAst.optional ||
         retExpr.type !== 'Variable' ||
-        retExpr.name !== matchAst.variable)
-    )
-      return null;
+        retExpr.name !== matchAst.variable
+      )
+        return null;
+    }
+    if (isAgg) {
+      if (matchAst.optional) return null;
+      const inner = (retExpr as any).expression;
+      if (inner.type !== 'Property' || inner.variable !== matchAst.variable)
+        return null;
+    }
 
-    let sql = isCount
-      ? 'SELECT COUNT(*) AS value FROM nodes'
-      : 'SELECT id, labels, properties FROM nodes';
+    let sql = 'SELECT id, labels, properties FROM nodes';
+    if (isCount) {
+      sql = 'SELECT COUNT(*) AS value FROM nodes';
+    } else if (isAgg) {
+      const inner = (retExpr as any).expression;
+      sql = `SELECT ${aggMap[retExpr.type]}(json_extract(properties, '$.${inner.property}')) AS value FROM nodes`;
+    }
     const paramsArr: any[] = [];
     const conds: string[] = [];
     if (matchAst.labels && matchAst.labels.length > 0) {
