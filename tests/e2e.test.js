@@ -57,6 +57,7 @@ runOnAdapters('MATCH all nodes', async (engine, adapter) => {
 
 runOnAdapters('MATCH with label', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person) RETURN n');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 3);

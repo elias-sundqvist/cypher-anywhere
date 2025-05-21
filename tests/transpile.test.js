@@ -146,3 +146,47 @@ test('transpile IN empty list yields constant false', () => {
   );
   assert.deepStrictEqual(result.params, ['%"Person"%']);
 });
+
+test('transpile match with multiple labels', () => {
+  const q = 'MATCH (n:Person:Actor) RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND labels LIKE ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', '%"Actor"%']);
+});
+
+test('transpile match with null property', () => {
+  const q = 'MATCH (n:Person {nickname:null}) RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.nickname\') IS NULL'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});
+
+test('transpile with WHERE <= comparison', () => {
+  const q = 'MATCH (n:Person) WHERE n.age <= 40 RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.age\') <= ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 40]);
+});
+
+test('transpile with complex WHERE', () => {
+  const q = 'MATCH (n:Person) WHERE n.name = "Alice" AND (n.age > 30 OR n.age IS NULL) RETURN n';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND (json_extract(properties, \'$.name\') = ? AND (json_extract(properties, \'$.age\') > ? OR json_extract(properties, \'$.age\') IS NULL))'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice', 30]);
+});
