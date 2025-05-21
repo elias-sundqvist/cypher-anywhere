@@ -527,3 +527,25 @@ test('transpile multiple return properties', () => {
   );
   assert.deepStrictEqual(result.params, ['%"Movie"%']);
 });
+
+test('transpile return id function', () => {
+  const q = 'MATCH (n:Person {name:"Alice"}) RETURN id(n) AS id';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id AS id FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.name\') = ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice']);
+});
+
+test('transpile order by id', () => {
+  const q = 'MATCH (n:Person) RETURN id(n) AS id ORDER BY id';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id AS id FROM nodes WHERE labels LIKE ? ORDER BY id'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%']);
+});

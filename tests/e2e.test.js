@@ -1316,6 +1316,7 @@ runOnAdapters('RETURN star with relationship chain', async (engine, adapter) => 
 });
 runOnAdapters('id() function returns node id', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person {name:"Alice"}) RETURN id(n) AS id');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.id);
   assert.deepStrictEqual(out, [1]);

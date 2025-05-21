@@ -592,7 +592,8 @@ export class SqlJsAdapter implements StorageAdapter {
       (matchAst.optional ||
         !(
           (retExpr.type === 'Variable' && retExpr.name === matchAst.variable) ||
-          (retExpr.type === 'Property' && retExpr.variable === matchAst.variable)
+          (retExpr.type === 'Property' && retExpr.variable === matchAst.variable) ||
+          ((retExpr as any).type === 'Id' && (retExpr as any).variable === matchAst.variable)
         ))
     )
       return null;
@@ -611,6 +612,9 @@ export class SqlJsAdapter implements StorageAdapter {
       sql += parts.join(', ');
     } else if (retExpr.type === 'Variable') {
       sql += 'id, labels, properties';
+    } else if ((retExpr as any).type === 'Id') {
+      const alias = matchAst.returnItems[0].alias || 'value';
+      sql += `id AS ${alias}`;
     } else {
       const alias = matchAst.returnItems[0].alias || 'value';
       sql += `json_extract(properties, '$.${(retExpr as any).property}') AS ${alias}`;
@@ -754,6 +758,8 @@ export class SqlJsAdapter implements StorageAdapter {
         }
       } else if (retExpr.type === 'Property') {
         aliasMap.set(matchAst.returnItems[0].alias || 'value', retExpr.property);
+      } else if ((retExpr as any).type === 'Id') {
+        aliasMap.set(matchAst.returnItems[0].alias || 'value', 'id');
       }
       const orderParts: string[] = [];
       for (const ob of matchAst.orderBy) {
@@ -763,13 +769,18 @@ export class SqlJsAdapter implements StorageAdapter {
             exprSql = 'id';
           } else if (aliasMap.has(ob.expression.name)) {
             const prop = aliasMap.get(ob.expression.name)!;
-            exprSql = `json_extract(properties, '$.${prop}')`;
+            exprSql = prop === 'id' ? 'id' : `json_extract(properties, '$.${prop}')`;
           }
         } else if (
           ob.expression.type === 'Property' &&
           ob.expression.variable === matchAst.variable
         ) {
           exprSql = `json_extract(properties, '$.${ob.expression.property}')`;
+        } else if (
+          ob.expression.type === 'Id' &&
+          ob.expression.variable === matchAst.variable
+        ) {
+          exprSql = 'id';
         }
         if (!exprSql) return null;
         const dir = ob.direction ? ' ' + ob.direction : '';
@@ -829,6 +840,8 @@ export class SqlJsAdapter implements StorageAdapter {
           if (item.expression.type === 'Variable') {
             out[alias] = self.rowToNode(row);
           } else if (item.expression.type === 'Property') {
+            out[alias] = row[col];
+          } else if (item.expression.type === 'Id') {
             out[alias] = row[col];
           } else if (item.expression.type === 'Count') {
             out[alias] = row.value;
