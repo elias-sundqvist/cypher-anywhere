@@ -1333,32 +1333,48 @@ runOnAdapters('negative numeric literals parsed correctly', async engine => {
   for await (const row of engine.run('MATCH (n:Neg) WHERE n.val < -1 RETURN n')) out.push(row.n);
   assert.strictEqual(out.length, 1);
 });
-runOnAdapters('arithmetic subtraction in RETURN', async engine => {
+runOnAdapters('arithmetic subtraction in RETURN', async (engine, adapter) => {
   const q = 'MATCH (m:Movie) RETURN m.released - 1900 AS diff ORDER BY diff';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.diff);
+  for await (const row of result) out.push(row.diff);
   assert.deepStrictEqual(out, [99, 114]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('arithmetic multiplication and division in RETURN', async engine => {
+runOnAdapters('arithmetic multiplication and division in RETURN', async (engine, adapter) => {
   const q = 'MATCH (m:Movie) RETURN (m.released - 1900) / 2 * 3 AS val ORDER BY val';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.val);
+  for await (const row of result) out.push(row.val);
   assert.deepStrictEqual(out, [((1999 - 1900) / 2) * 3, ((2014 - 1900) / 2) * 3]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('unary minus on property', async engine => {
+runOnAdapters('unary minus on property', async (engine, adapter) => {
   const q = 'MATCH (m:Movie {title:"John Wick"}) RETURN -m.released AS neg';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.neg);
+  for await (const row of result) out.push(row.neg);
   assert.deepStrictEqual(out, [-2014]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('unary minus on expression', async engine => {
+runOnAdapters('unary minus on expression', async (engine, adapter) => {
   const q = 'RETURN -(1 + 2) AS val';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.val);
+  for await (const row of result) out.push(row.val);
   assert.deepStrictEqual(out, [-3]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 runOnAdapters('RETURN star returns all variables', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person {name:"Alice"}) RETURN *');
@@ -1424,10 +1440,14 @@ runOnAdapters('WITH alias named id allowed', async engine => {
   assert.deepStrictEqual(out, [1]);
 });
 
-runOnAdapters('standalone RETURN expression', async engine => {
+runOnAdapters('standalone RETURN expression', async (engine, adapter) => {
+  const result = engine.run('RETURN 42 AS val');
   const out = [];
-  for await (const row of engine.run('RETURN 42 AS val')) out.push(row.val);
+  for await (const row of result) out.push(row.val);
   assert.deepStrictEqual(out, [42]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('NULL literal handled in create and match', async engine => {
@@ -1441,11 +1461,15 @@ runOnAdapters('NULL literal handled in create and match', async engine => {
   assert.strictEqual(out.length, 1);
 });
 
-runOnAdapters('NULL in arithmetic returns NULL', async engine => {
+runOnAdapters('NULL in arithmetic returns NULL', async (engine, adapter) => {
   const q = 'RETURN null + 1 AS a, 1 + null AS b, null * 2 AS c, -null AS d';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row);
+  for await (const row of result) out.push(row);
   assert.deepStrictEqual(out, [{ a: null, b: null, c: null, d: null }]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('WITH passes variable to subsequent MATCH', async engine => {
@@ -1513,39 +1537,59 @@ runOnAdapters('quoted identifiers for label, variable and property', async engin
   assert.deepStrictEqual(out, ['Zoe']);
 });
 
-runOnAdapters('MATCH without variable returns count', async engine => {
+runOnAdapters('MATCH without variable returns count', async (engine, adapter) => {
   const q = 'MATCH (:Person) RETURN COUNT(*) AS cnt';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.cnt);
+  for await (const row of result) out.push(row.cnt);
   assert.deepStrictEqual(out, [3]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('length() on list expression returns length', async engine => {
+runOnAdapters('length() on list expression returns length', async (engine, adapter) => {
   const q = 'RETURN length([1,2,3]) AS len';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.len);
+  for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [3]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('length() on string expression returns length', async engine => {
+runOnAdapters('length() on string expression returns length', async (engine, adapter) => {
   const q = "RETURN length('abc') AS len";
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.len);
+  for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [3]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('size() on list expression returns length', async engine => {
+runOnAdapters('size() on list expression returns length', async (engine, adapter) => {
   const q = 'RETURN size([1,2,3]) AS len';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.len);
+  for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [3]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
-runOnAdapters('size() on string expression returns length', async engine => {
+runOnAdapters('size() on string expression returns length', async (engine, adapter) => {
   const q = "RETURN size('abc') AS len";
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(row.len);
+  for await (const row of result) out.push(row.len);
   assert.deepStrictEqual(out, [3]);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('size() on path returns hop count', async engine => {

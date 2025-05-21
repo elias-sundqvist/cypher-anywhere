@@ -639,6 +639,8 @@ export class SqlJsAdapter implements StorageAdapter {
         case 'Avg':
         case 'Collect':
           return expr.expression ? checkExpr(expr.expression) : true;
+        case 'Length':
+          return checkExpr(expr.expression);
         case 'All':
           return matchAst.returnItems.length === 1;
         default:
@@ -982,13 +984,15 @@ export class SqlJsAdapter implements StorageAdapter {
           case 'Min':
           case 'Max':
           case 'Avg':
-          case 'Collect':
-            return expr.expression ? checkExpr(expr.expression) : true;
-          case 'All':
-            return multi.returnItems.length === 1;
-          default:
-            return false;
-        }
+        case 'Collect':
+          return expr.expression ? checkExpr(expr.expression) : true;
+        case 'Length':
+          return checkExpr(expr.expression);
+        case 'All':
+          return multi.returnItems.length === 1;
+        default:
+          return false;
+      }
       }
 
       for (const ri of multi.returnItems) {
