@@ -825,11 +825,15 @@ runOnAdapters('relationships() on path returns relationships', async engine => {
   assert.strictEqual(out[0][0].type, 'ACTED_IN');
 });
 
-runOnAdapters('OPTIONAL MATCH missing returns null row', async engine => {
+runOnAdapters('OPTIONAL MATCH missing returns null row', async (engine, adapter) => {
+  const result = engine.run('OPTIONAL MATCH (n:Missing) RETURN n');
   const out = [];
-  for await (const row of engine.run('OPTIONAL MATCH (n:Missing) RETURN n')) out.push(row.n);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0], undefined);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('OPTIONAL MATCH existing node returns it', async (engine, adapter) => {
@@ -1464,15 +1468,18 @@ runOnAdapters('standalone RETURN expression', async (engine, adapter) => {
   }
 });
 
-runOnAdapters('NULL literal handled in create and match', async engine => {
+runOnAdapters('NULL literal handled in create and match', async (engine, adapter) => {
   let node;
   for await (const row of engine.run('CREATE (n:NullTest {v:null}) RETURN n'))
     node = row.n;
   assert.strictEqual(node.properties.v, null);
+  const result = engine.run('MATCH (n:NullTest) WHERE n.v = null RETURN n');
   const out = [];
-  for await (const row of engine.run('MATCH (n:NullTest) WHERE n.v = null RETURN n'))
-    out.push(row.n);
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('NULL in arithmetic returns NULL', async (engine, adapter) => {
