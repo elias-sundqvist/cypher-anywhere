@@ -425,7 +425,7 @@ export class SqlJsAdapter implements StorageAdapter {
       await self.ensureReady();
       const stmt = self.db.prepare(sql);
       stmt.bind(paramsArr);
-      const rows: { node: NodeRecord; data: Record<string, any> }[] = [];
+      let rows: { node: NodeRecord; data: Record<string, any> }[] = [];
       while (stmt.step()) {
         const node = self.rowToNode(stmt.getAsObject());
         const data: Record<string, any> = {};
@@ -443,6 +443,19 @@ export class SqlJsAdapter implements StorageAdapter {
         rows.push({ node, data });
       }
       stmt.free();
+
+      if (matchAst.distinct) {
+        const seen = new Set<string>();
+        const uniq: { node: NodeRecord; data: Record<string, any> }[] = [];
+        for (const r of rows) {
+          const key = JSON.stringify(r.data);
+          if (!seen.has(key)) {
+            seen.add(key);
+            uniq.push(r);
+          }
+        }
+        rows = uniq;
+      }
 
       if (matchAst.orderBy && matchAst.orderBy.length > 0) {
         rows.sort((a, b) => {
