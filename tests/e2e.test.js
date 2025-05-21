@@ -808,12 +808,16 @@ runOnAdapters('OPTIONAL MATCH missing returns null row', async engine => {
   assert.strictEqual(out[0], undefined);
 });
 
-runOnAdapters('OPTIONAL MATCH existing node returns it', async engine => {
-  const out = [];
+runOnAdapters('OPTIONAL MATCH existing node returns it', async (engine, adapter) => {
   const q = 'OPTIONAL MATCH (n:Person {name:"Alice"}) RETURN n';
-  for await (const row of engine.run(q)) out.push(row.n);
+  const result = engine.run(q);
+  const out = [];
+  for await (const row of result) out.push(row.n);
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].properties.name, 'Alice');
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('OPTIONAL MATCH multiple patterns returns partial row', async engine => {
@@ -1264,11 +1268,15 @@ runOnAdapters('undirected single hop match', async engine => {
   assert.deepStrictEqual(out.sort(), expected.sort());
 });
 
-runOnAdapters('MATCH with multiple node patterns', async engine => {
+runOnAdapters('MATCH with multiple node patterns', async (engine, adapter) => {
   const q = 'MATCH (p:Person), (m:Movie) RETURN p.name AS name, m.title AS title';
+  const result = engine.run(q);
   const out = [];
-  for await (const row of engine.run(q)) out.push(`${row.name}-${row.title}`);
+  for await (const row of result) out.push(`${row.name}-${row.title}`);
   assert.strictEqual(out.length, 6);
+  if (adapter.supportsTranspilation) {
+    assert.strictEqual(result.meta.transpiled, true);
+  }
 });
 
 runOnAdapters('negative numeric literals parsed correctly', async engine => {
