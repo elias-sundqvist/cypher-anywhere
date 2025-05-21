@@ -604,3 +604,36 @@ test('transpile SUM aggregation', () => {
   );
   assert.deepStrictEqual(result.params, ['%"Movie"%']);
 });
+
+test('transpile RETURN id function', () => {
+  const q = 'MATCH (n:Person {name:"Alice"}) RETURN id(n) AS id';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id AS id FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.name\') = ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice']);
+});
+
+test('transpile RETURN labels function', () => {
+  const q = 'MATCH (n:Person {name:"Alice"}) RETURN labels(n) AS labs';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT labels AS labs FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.name\') = ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice']);
+});
+
+test('transpile RETURN star single variable', () => {
+  const q = 'MATCH (n:Person {name:"Alice"}) RETURN *';
+  const result = adapter.transpile(q);
+  assert.ok(result);
+  assert.strictEqual(
+    result.sql,
+    'SELECT id, labels, properties FROM nodes WHERE labels LIKE ? AND json_extract(properties, \'$.name\') = ?'
+  );
+  assert.deepStrictEqual(result.params, ['%"Person"%', 'Alice']);
+});

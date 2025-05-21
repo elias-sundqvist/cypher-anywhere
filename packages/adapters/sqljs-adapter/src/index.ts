@@ -591,17 +591,17 @@ export class SqlJsAdapter implements StorageAdapter {
       retExpr.type === 'Max' ||
       retExpr.type === 'Sum' ||
       retExpr.type === 'Avg';
+    const isId = retExpr.type === 'Id';
+    const isLabels = retExpr.type === 'Labels';
+    const isStar = retExpr.type === 'All';
     if ((isCount || isAgg) && (retExpr as any).distinct) return null;
-    if (
-      !isCount &&
-      !isAgg &&
-      (matchAst.optional ||
-        !(
-          (retExpr.type === 'Variable' && retExpr.name === matchAst.variable) ||
-          (retExpr.type === 'Property' && retExpr.variable === matchAst.variable)
-        ))
-    )
-      return null;
+    const isSimpleReturn =
+      (retExpr.type === 'Variable' && retExpr.name === matchAst.variable) ||
+      (retExpr.type === 'Property' && retExpr.variable === matchAst.variable) ||
+      (retExpr.type === 'Id' && retExpr.variable === matchAst.variable) ||
+      (retExpr.type === 'Labels' && retExpr.variable === matchAst.variable) ||
+      retExpr.type === 'All';
+    if (!isCount && !isAgg && (matchAst.optional || !isSimpleReturn)) return null;
 
     let sql = 'SELECT ';
     if (isCount) {
@@ -631,8 +631,14 @@ export class SqlJsAdapter implements StorageAdapter {
         );
       }
       sql += parts.join(', ');
-    } else if (retExpr.type === 'Variable') {
+    } else if (retExpr.type === 'Variable' || isStar) {
       sql += 'id, labels, properties';
+    } else if (retExpr.type === 'Id') {
+      const alias = matchAst.returnItems[0].alias || 'value';
+      sql += `id AS ${alias}`;
+    } else if (retExpr.type === 'Labels') {
+      const alias = matchAst.returnItems[0].alias || 'value';
+      sql += `labels AS ${alias}`;
     } else {
       const alias = matchAst.returnItems[0].alias || 'value';
       sql += `json_extract(properties, '$.${(retExpr as any).property}') AS ${alias}`;
@@ -840,18 +846,21 @@ export class SqlJsAdapter implements StorageAdapter {
         const row = stmt.getAsObject();
         const out: Record<string, unknown> = {};
         for (const item of matchAst.returnItems) {
-          const alias =
-            item.alias ||
-            (allowMulti
-              ? (item.expression as any).property
-              : item.expression.type === 'Variable'
-              ? item.expression.name
-              : 'value');
+          let alias: string;
+          if (item.alias) alias = item.alias;
+          else if (allowMulti) alias = (item.expression as any).property;
+          else if (item.expression.type === 'Variable') alias = item.expression.name;
+          else if (item.expression.type === 'All') alias = matchAst.variable;
+          else alias = 'value';
           const col = alias;
-          if (item.expression.type === 'Variable') {
+          if (item.expression.type === 'Variable' || item.expression.type === 'All') {
             out[alias] = self.rowToNode(row);
           } else if (item.expression.type === 'Property') {
             out[alias] = row[col];
+          } else if (item.expression.type === 'Id') {
+            out[alias] = row[col];
+          } else if (item.expression.type === 'Labels') {
+            out[alias] = JSON.parse(String(row[col] ?? '[]'));
           } else if (item.expression.type === 'Count') {
             out[alias] = row.value;
           } else if (

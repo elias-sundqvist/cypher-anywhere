@@ -1308,6 +1308,7 @@ runOnAdapters('unary minus on expression', async (engine, adapter) => {
 });
 runOnAdapters('RETURN star returns all variables', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person {name:"Alice"}) RETURN *');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row);
   assert.strictEqual(out.length, 1);
@@ -1328,6 +1329,7 @@ runOnAdapters('RETURN star with relationship chain', async (engine, adapter) => 
 });
 runOnAdapters('id() function returns node id', async (engine, adapter) => {
   const result = engine.run('MATCH (n:Person {name:"Alice"}) RETURN id(n) AS id');
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.id);
   assert.deepStrictEqual(out, [1]);
@@ -1352,6 +1354,7 @@ runOnAdapters('type() on relationship returns rel type', async (engine, adapter)
 runOnAdapters('labels() function returns node labels', async (engine, adapter) => {
   const q = 'MATCH (n:Person {name:"Carol"}) RETURN labels(n) AS labs';
   const result = engine.run(q);
+  assert.strictEqual(result.meta.transpiled, !!adapter.supportsTranspilation);
   const out = [];
   for await (const row of result) out.push(row.labs);
   assert.deepStrictEqual(out, [['Person', 'Actor']]);
