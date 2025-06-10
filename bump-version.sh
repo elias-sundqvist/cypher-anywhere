@@ -6,5 +6,5 @@ for pkg in packages/adapters/json-adapter packages/adapters/sqljs-adapter packag
   npm pkg set "dependencies.@cypher-anywhere/core"="$CORE_VERSION" -w "$pkg"
   npm version patch --workspace "$pkg" --no-workspaces-update --no-git-tag-version
 done
-git add packages/*/package.json
+git add packages/core/package.json packages/adapters/*/package.json
 git commit -m "chore: bump versions to $CORE_VERSION" || echo "No version changes"
