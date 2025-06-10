@@ -64,3 +64,14 @@ npm test    # executes the Jest suite
 ```
 
 For more details, see the [design document](./design_document.md).
+
+## Release & Publishing
+
+Version bumps are automated via the `Bump Version` workflow. To allow the
+resulting tag push to trigger the `Publish to npm` workflow you must provide a
+personal access token (PAT):
+
+1. Create a PAT with the `repo` scope and add it as a repository secret named
+   `PAT_TOKEN`.
+2. The `bump-version.yml` workflow uses this secret when pushing the bump commit
+   and tag so GitHub treats it as a normal user push and triggers publishing.
