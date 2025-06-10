@@ -1,23 +1,29 @@
 name: Publish to npm
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [master]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v3
         with:
           node-version: 18
           registry-url: 'https://registry.npmjs.org/'
       - run: npm install
+      - run: ./bump-version.sh
+      - run: git config user.name 'github-actions'
+      - run: git config user.email 'github-actions@github.com'
+      - run: git push
       - run: npm run build
       - run: npm publish --workspaces --access public
         env:
