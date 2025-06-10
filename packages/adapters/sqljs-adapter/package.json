@@ -1,10 +1,10 @@
 {
   "name": "@cypher-anywhere/sqljs-adapter",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "dependencies": {
-    "@cypher-anywhere/core": "0.0.8",
+    "@cypher-anywhere/core": "0.0.9",
     "sql.js": "^1.13.0"
   },
   "scripts": {
