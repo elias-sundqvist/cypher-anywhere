@@ -20,9 +20,9 @@ jobs:
           node-version: 18
           registry-url: 'https://registry.npmjs.org/'
       - run: npm install
-      - run: ./bump-version.sh
       - run: git config user.name 'github-actions'
       - run: git config user.email 'github-actions@github.com'
+      - run: ./bump-version.sh
       - run: git push
       - run: npm run build
       - run: npm publish --workspaces --access public
