@@ -1,0 +1,26 @@
+name: Bump Version
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    if: github.actor != 'github-actions'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - run: npm install
+      - run: git config user.name 'github-actions'
+      - run: git config user.email 'github-actions@github.com'
+      - run: ./bump-version.sh
+      - run: git push origin HEAD:master --follow-tags
