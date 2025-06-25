@@ -6,15 +6,16 @@
     "packages/adapters/*"
   ],
   "scripts": {
-    "build": "npm run build:packages",
+    "build": "turbo run build",
     "build:packages": "tsc -b packages/core packages/adapters/json-adapter packages/adapters/sqljs-adapter packages/adapters/sqljs-schema-adapter",
     "build:demo": "node build-demo.js",
-    "test": "npm run build && node --test tests/*.js"
+    "test": "turbo run build && node --test tests/*.js"
   },
   "devDependencies": {
     "esbuild": "^0.20.0",
     "jest": "^29.6.1",
     "ts-jest": "^29.1.1",
+    "turbo": "^1.10.10",
     "typescript": "^5.2.2"
   },
   "dependencies": {

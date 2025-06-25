@@ -23,6 +23,10 @@ cypher-anywhere/
 └── design_document.md       # architecture overview
 ```
 
+Builds across these packages are orchestrated using [Turborepo](https://turbo.build).
+Running `npm run build` will invoke Turbo to compile each workspace in the
+correct dependency order.
+
 ## Example
 
 This repository currently contains a small proof-of-concept implementation. Only a trivial query form is supported:
